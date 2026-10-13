@@ -1,6 +1,6 @@
 # @vistalink/cli
 
-> 0.0.x reserves the name; the 1.0 release tracks the API v2 launch.
+> 0.0.x reserves the name; the first working release is 2.0.0, tracking API v2.
 
 `vistalink` is the command line for the VistaLink hotel API v2. It is built on
 `@vistalink/api` (bundled into the binary) and `commander`, and runs on

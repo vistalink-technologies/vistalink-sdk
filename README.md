@@ -3,10 +3,13 @@
 Client libraries and a command line for the VistaLink hotel API v2. All three
 are generated from one OpenAPI document, `spec/openapi.v2.json`.
 
-**Local only.** This repository has no remote and nothing here is published
-yet. Every package is pinned at **0.0.1**, ready to reserve its name
-(`scripts/reserve.sh`). 0.0.x reserves the name; the 1.0 release tracks the
-API v2 launch.
+Official SDKs for the VistaLink hotel API v2 (https://api.vistalink.com/v2):
+TypeScript (`@vistalink/api`), Python (`vistalink`) and the `vistalink` CLI.
+Generated from the published OpenAPI document at
+https://api.vistalink.com/v2/openapi.json. `@vistalink/api`, `@vistalink/cli`
+and `vistalink` on PyPI are 0.0.1 name reservations; the unscoped `vistalink`
+npm package is not published yet. The first working release is 2.0.0,
+published from this repository. Docs: https://vistalink.com/developers/docs.
 
 ## Layout
 
@@ -25,8 +28,8 @@ scripts/
   reserve.sh             prints (never runs) the name-reservation publish commands
   spec_diff.py           structural OpenAPI diff (used for the nightly PR body)
 .github/workflows/
-  spec-sync.yml          nightly: diff against https://api.vistalink.com/v2/openapi.json, regenerate, test, open a PR (not run yet)
-  publish.yml            on a v* tag: verify, npm publish --provenance (3 packages), PyPI trusted publishing (not run yet)
+  spec-sync.yml          nightly: diff against https://api.vistalink.com/v2/openapi.json, regenerate, test, open a PR (has not run yet)
+  publish.yml            on a v* tag: verify, npm publish --provenance (3 packages), PyPI trusted publishing (has not run yet)
 ```
 
 ## Package names

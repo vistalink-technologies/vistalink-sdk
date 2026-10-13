@@ -1,6 +1,6 @@
 # vistalink (npm)
 
-> 0.0.x reserves the name; the 1.0 release tracks the API v2 launch.
+> 0.0.x reserves the name; the first working release is 2.0.0, tracking API v2.
 
 This package points at the VistaLink command line, which lives at
 [`@vistalink/cli`](https://www.npmjs.com/package/@vistalink/cli). Install that
