@@ -1,6 +1,6 @@
 # vistalink (Python)
 
-> 0.0.x reserves the name; the 1.0 release tracks the API v2 launch.
+> 0.0.x reserves the name; the first working release is 2.0.0, tracking API v2.
 
 Python client for the VistaLink hotel API v2: a thin sync + async client on
 `httpx`, with pydantic v2 models generated from `spec/openapi.v2.json`.

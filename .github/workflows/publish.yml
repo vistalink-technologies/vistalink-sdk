@@ -1,5 +1,5 @@
 # Publish @vistalink/api, @vistalink/cli, vistalink (npm) and vistalink (PyPI)
-# from a v* tag. Not run yet: this repository has no remote.
+# from a v* tag. Has not run yet.
 #
 # npm: provenance (npm publish --provenance) via GitHub OIDC. Uses npm trusted
 #   publishing when it is configured for each package on npmjs.com (npm >= 11.5.1,

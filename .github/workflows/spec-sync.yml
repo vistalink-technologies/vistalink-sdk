@@ -1,6 +1,6 @@
 # Nightly: fetch the live v2 OpenAPI document, and when it differs from
 # spec/openapi.v2.json regenerate the three SDKs, run their tests and open a PR.
-# Not run yet: this repository has no remote. Needs repo setting "Allow GitHub
+# Has not run yet. Needs repo setting "Allow GitHub
 # Actions to create and approve pull requests".
 name: spec-sync
 

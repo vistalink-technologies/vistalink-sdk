@@ -420,13 +420,21 @@ class ClarificationAnswer(BaseModel):
         ),
     ]
     option_id: Annotated[
-        str,
+        str | None,
         Field(
-            description="The chosen `clarifications[].options[].id`.",
+            description="The chosen `clarifications[].options[].id`, for a `single_choice` question.",
             max_length=64,
             title="Option Id",
         ),
-    ]
+    ] = None
+    value: Annotated[
+        str | None,
+        Field(
+            description="The answer in the traveller's words, for a `free_text` question, for example `Lisbon`.",
+            max_length=200,
+            title="Value",
+        ),
+    ] = None
 
 
 class ClarificationOption(BaseModel):
@@ -1557,6 +1565,13 @@ class Offer(BaseModel):
         Field(
             description="True when the rate can be canceled free of charge, false when it is non-refundable, null when unknown.",
             title="Free Cancellation",
+        ),
+    ] = None
+    member_rate: Annotated[
+        bool | None,
+        Field(
+            description="True when the price is a member or loyalty rate that needs the guest signed in to the hotel's programme, false for a public rate, null when the source does not say. Member rates are listed so you see the hotel's full offer list; within a room they sort after public rates, and `POST /v2/bookings` accepts public rates only.",
+            title="Member Rate",
         ),
     ] = None
     cancellation_deadline: Annotated[
@@ -2780,7 +2795,7 @@ class Warning(BaseModel):
     code: Annotated[
         str,
         Field(
-            description="Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), and on rates `currency_unavailable`.",
+            description='Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), and on rates `currency_unavailable`.',
             title="Code",
         ),
     ]
@@ -3462,7 +3477,7 @@ class Clarification(BaseModel):
     field: Annotated[
         str,
         Field(
-            description="The criterion that is ambiguous; `location` (a city or landmark with several matches) is the only one asked today.",
+            description="The criterion that is ambiguous or missing; `location` (a city or landmark with several matches, or no place at all) is the only one asked today.",
             title="Field",
         ),
     ]
@@ -3474,15 +3489,18 @@ class Clarification(BaseModel):
         ),
     ]
     answer_type: Annotated[
-        Literal["single_choice", "multi_choice", "free_text"] | None,
+        Literal["single_choice", "free_text"] | None,
         Field(
-            description="How to answer; `single_choice` (pick one of `options`) is the only type used today.",
+            description="How to answer: `single_choice` (send one of `options` as `option_id`) or `free_text` (no options; send the traveller's answer as `value`, for example a city when the search named no place).",
             title="Answer Type",
         ),
     ] = "single_choice"
     options: Annotated[
         list[ClarificationOption] | None,
-        Field(description="The possible answers, at least two.", title="Options"),
+        Field(
+            description="The possible answers: at least two for `single_choice`, none for `free_text`.",
+            title="Options",
+        ),
     ] = None
 
 

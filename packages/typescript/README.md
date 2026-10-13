@@ -1,6 +1,6 @@
 # @vistalink/api
 
-> 0.0.x reserves the name; the 1.0 release tracks the API v2 launch.
+> 0.0.x reserves the name; the first working release is 2.0.0, tracking API v2.
 
 TypeScript client for the VistaLink hotel API v2. Types are generated from
 `spec/openapi.v2.json` with `openapi-typescript`; requests go through
