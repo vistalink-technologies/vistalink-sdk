@@ -7,8 +7,10 @@ Official SDKs for the VistaLink hotel API v2 (https://api.vistalink.com/v2):
 TypeScript (`@vistalink/api`), Python (`vistalink`) and the `vistalink` CLI.
 Generated from the published OpenAPI document at
 https://api.vistalink.com/v2/openapi.json. `@vistalink/api`, `@vistalink/cli`
-and `vistalink` on PyPI are 0.0.1 name reservations; the unscoped `vistalink`
-npm package is not published yet. The first working release is 2.0.0,
+and `vistalink` on PyPI are 0.0.1 name reservations. The unscoped `vistalink`
+npm package is not published: npm blocks the name as too similar to an
+existing package, and an exception has been requested. Until then the
+publish workflow skips it. The first working release is 2.0.0,
 published from this repository. Docs: https://vistalink.com/developers/docs.
 
 ## Layout
@@ -20,7 +22,7 @@ packages/
   typescript/            @vistalink/api: openapi-typescript types + thin openapi-fetch client (ESM+CJS, Node 20+, browsers)
   python/                vistalink: datamodel-code-generator pydantic models + thin httpx client (sync + async)
   cli/                   @vistalink/cli: `vistalink` command on commander, built on @vistalink/api
-  vistalink-unscoped/    vistalink (npm): claims the unscoped name; its `vistalink` bin runs @vistalink/cli
+  vistalink-unscoped/    vistalink (npm): the unscoped name, blocked by npm for now; its `vistalink` bin runs @vistalink/cli
 scripts/
   regenerate.sh          regenerate all three from spec/openapi.v2.json (`--test` also builds and tests)
   sync_versions.py       SDK versions follow the spec's info.version, or VERSION_PIN (see Versioning)
@@ -29,7 +31,7 @@ scripts/
   spec_diff.py           structural OpenAPI diff (used for the nightly PR body)
 .github/workflows/
   spec-sync.yml          nightly: diff against https://api.vistalink.com/v2/openapi.json, regenerate, test, open a PR (has not run yet)
-  publish.yml            on a v* tag: verify, npm publish --provenance (3 packages), PyPI trusted publishing (has not run yet)
+  publish.yml            on a v* tag: verify, npm publish --provenance (SDK + CLI; unscoped once npm allows the name), PyPI trusted publishing (has not run yet)
 ```
 
 ## Package names
@@ -38,7 +40,7 @@ scripts/
 |---|---|---|
 | npm SDK | `@vistalink/api` | `packages/typescript/package.json` |
 | npm CLI | `@vistalink/cli` (binary `vistalink`) | `packages/cli/package.json`. The docs already print `npm install -g @vistalink/cli` (`lib/api-content.ts` `CLI_PACKAGE`) |
-| npm, unscoped | `vistalink` (binary `vistalink`, runs `@vistalink/cli`) | `packages/vistalink-unscoped/package.json` |
+| npm, unscoped | `vistalink` (binary `vistalink`, runs `@vistalink/cli`). Not published: npm blocks the name pending an exception | `packages/vistalink-unscoped/package.json` |
 | PyPI | `vistalink` (import `vistalink`) | `packages/python/pyproject.toml` |
 
 On 2026-10-07 all four were unclaimed (`npm view` and PyPI's JSON API both

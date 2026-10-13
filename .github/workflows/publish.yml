@@ -67,10 +67,28 @@ jobs:
       - run: pnpm --filter @vistalink/api run build && pnpm --filter @vistalink/cli run build
       # pnpm pack rewrites workspace:* to the real version; npm publish then
       # uploads the tarball with a provenance attestation. Order: SDK, CLI, unscoped.
+      #
+      # The unscoped "vistalink" ships only once its name exists on npm. npm
+      # refused the first publish (403, "too similar to existing package
+      # vitalik"); a name exception has been requested from npm support. Once
+      # granted, the manual 0.0.1 reservation creates it and this picks it up.
+      - name: Unscoped name claimed?
+        id: unscoped
+        run: |
+          if npm view vistalink name >/dev/null 2>&1; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::npm package 'vistalink' does not exist yet; publishing @vistalink/api and @vistalink/cli only"
+          fi
       - name: Pack
+        env:
+          UNSCOPED: ${{ steps.unscoped.outputs.publish }}
         run: |
           mkdir -p "$RUNNER_TEMP/pack"
-          for p in @vistalink/api @vistalink/cli vistalink; do
+          pkgs="@vistalink/api @vistalink/cli"
+          [ "$UNSCOPED" = "true" ] && pkgs="$pkgs vistalink"
+          for p in $pkgs; do
             pnpm --filter "$p" pack --pack-destination "$RUNNER_TEMP/pack"
           done
           ls -l "$RUNNER_TEMP/pack"
@@ -79,9 +97,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           V: ${{ needs.verify.outputs.version }}
           TAG: ${{ needs.verify.outputs.npm_tag }}
+          UNSCOPED: ${{ steps.unscoped.outputs.publish }}
         run: |
           set -euo pipefail
-          for t in "vistalink-api-${V}.tgz" "vistalink-cli-${V}.tgz" "vistalink-${V}.tgz"; do
+          tarballs="vistalink-api-${V}.tgz vistalink-cli-${V}.tgz"
+          [ "$UNSCOPED" = "true" ] && tarballs="$tarballs vistalink-${V}.tgz"
+          for t in $tarballs; do
             npm publish "$RUNNER_TEMP/pack/$t" --provenance --access public --tag "$TAG"
           done
 
