@@ -1,0 +1,71 @@
+{
+  "name": "@vistalink/api",
+  "version": "0.0.1",
+  "description": "TypeScript client for the VistaLink hotel API v2",
+  "homepage": "https://vistalink.com/developers",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vistalink-technologies/vistalink-sdk.git",
+    "directory": "packages/typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/vistalink-technologies/vistalink-sdk/issues"
+  },
+  "author": "VistaLink",
+  "license": "MIT",
+  "keywords": [
+    "vistalink",
+    "hotels",
+    "travel",
+    "api",
+    "sdk"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.cjs",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.cts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate": "openapi-typescript ../../spec/openapi.v2.json -o src/generated/schema.ts --root-types --root-types-no-schema-prefix --default-non-nullable false",
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run typecheck && pnpm run build && pnpm run test"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

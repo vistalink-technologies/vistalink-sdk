@@ -1,0 +1,4 @@
+packages:
+  - packages/typescript
+  - packages/cli
+  - packages/vistalink-unscoped

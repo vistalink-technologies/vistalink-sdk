@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vistalink"
+version = "0.0.1"
+description = "Python client for the VistaLink hotel API v2 (sync + async, httpx + pydantic)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "VistaLink" }]
+keywords = ["vistalink", "hotels", "travel", "api", "sdk"]
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.27,<1", "pydantic>=2.6,<3"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+  "Framework :: AsyncIO",
+]
+
+[project.urls]
+Homepage = "https://vistalink.com/developers"
+Documentation = "https://vistalink.com/developers/docs"
+Source = "https://github.com/vistalink-technologies/vistalink-sdk"
+Issues = "https://github.com/vistalink-technologies/vistalink-sdk/issues"
+"OpenAPI" = "https://api.vistalink.com/v2/openapi.json"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.21", "datamodel-code-generator[http]>=0.26"]
+release = ["build>=1.2", "twine>=6.1"]  # twine 6.1+ understands Metadata-Version 2.4 (license-files)
+
+[tool.hatch.build.targets.sdist]
+include = ["src/vistalink", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vistalink"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

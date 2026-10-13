@@ -1,0 +1,56 @@
+{
+  "name": "@vistalink/cli",
+  "version": "0.0.1",
+  "description": "vistalink: command line for the VistaLink hotel API v2",
+  "homepage": "https://vistalink.com/developers",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vistalink-technologies/vistalink-sdk.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/vistalink-technologies/vistalink-sdk/issues"
+  },
+  "author": "VistaLink",
+  "license": "MIT",
+  "keywords": [
+    "vistalink",
+    "hotels",
+    "travel",
+    "api",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "bin": {
+    "vistalink": "./dist/cli.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate": "node scripts/gen-operations.mjs",
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm --filter @vistalink/api run build && pnpm run typecheck && pnpm run build && pnpm run test"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@vistalink/api": "workspace:*",
+    "@types/node": "^20.19.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

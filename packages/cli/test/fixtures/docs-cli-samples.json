@@ -1,0 +1,540 @@
+{
+  "source": "vistalink.com claude/developers-endpoint-refactor-bd1a89@c8f9b1e content/openapi.v2.json (cliSample in lib/api-docs-text.ts; render-default parameters only)",
+  "samples": [
+    {
+      "key": "POST /v2/hotels/resolve",
+      "cli": "vistalink hotels resolve",
+      "argv": [
+        "hotels",
+        "resolve",
+        "--identifiers",
+        "[{\"booking_url\":\"https://www.booking.com/hotel/it/umilta-36.en-gb.html\"},{\"website_url\":\"https://umilta36.com\"},{\"expedia_url\":\"https://www.expedia.com/Rome-Hotels-Umilta-36.h12345.Hotel-Information\"},{\"name\":\"Umiltà 36\",\"city\":\"Rome\",\"country\":\"IT\"}]"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "identifiers": [
+          {
+            "booking_url": "https://www.booking.com/hotel/it/umilta-36.en-gb.html"
+          },
+          {
+            "website_url": "https://umilta36.com"
+          },
+          {
+            "expedia_url": "https://www.expedia.com/Rome-Hotels-Umilta-36.h12345.Hotel-Information"
+          },
+          {
+            "name": "Umiltà 36",
+            "city": "Rome",
+            "country": "IT"
+          }
+        ]
+      }
+    },
+    {
+      "key": "GET /v2/hotels/{hotel_id}",
+      "cli": "vistalink hotels get",
+      "argv": [
+        "hotels",
+        "get",
+        "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "--sections",
+        "core,images,rooms,rates",
+        "--check-in",
+        "2026-11-14",
+        "--check-out",
+        "2026-11-16",
+        "--adults",
+        "2",
+        "--currency",
+        "EUR",
+        "--search-id",
+        "srch_3f9c2a7e4b1d4c8a9e6f0b2d5a7c1e93"
+      ],
+      "path": {
+        "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19"
+      },
+      "query": {
+        "sections": "core,images,rooms,rates",
+        "check_in": "2026-11-14",
+        "check_out": "2026-11-16",
+        "adults": "2",
+        "currency": "EUR",
+        "search_id": "srch_3f9c2a7e4b1d4c8a9e6f0b2d5a7c1e93"
+      }
+    },
+    {
+      "key": "POST /v2/search",
+      "cli": "vistalink search run",
+      "argv": [
+        "search",
+        "run",
+        "--query",
+        "quiet place near the Colosseum with a rooftop, under 400 a night",
+        "--filters",
+        "{\"location\":{\"city\":\"Rome\",\"country\":\"IT\"},\"stay\":{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]},\"budget\":{\"min\":\"100\",\"max\":\"400\",\"currency\":\"EUR\",\"basis\":\"per_room_per_night\"},\"min_stars\":4,\"amenities\":[\"POOL\",\"SPA\"]}",
+        "--preferences",
+        "{\"text\":\"romantic, great breakfast\",\"tags\":[\"ROMANTIC\"]}",
+        "--ranking",
+        "semantic",
+        "--limit",
+        "10",
+        "--rates",
+        "cached",
+        "--images",
+        "6",
+        "--currency",
+        "EUR",
+        "--locale",
+        "en",
+        "--clarification",
+        "{\"policy\":\"auto\"}"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "query": "quiet place near the Colosseum with a rooftop, under 400 a night",
+        "filters": {
+          "location": {
+            "city": "Rome",
+            "country": "IT"
+          },
+          "stay": {
+            "check_in": "2026-11-14",
+            "check_out": "2026-11-16",
+            "rooms": [
+              {
+                "adults": 2,
+                "children_ages": []
+              }
+            ]
+          },
+          "budget": {
+            "min": "100",
+            "max": "400",
+            "currency": "EUR",
+            "basis": "per_room_per_night"
+          },
+          "min_stars": 4,
+          "amenities": [
+            "POOL",
+            "SPA"
+          ]
+        },
+        "preferences": {
+          "text": "romantic, great breakfast",
+          "tags": [
+            "ROMANTIC"
+          ]
+        },
+        "ranking": "semantic",
+        "limit": 10,
+        "rates": "cached",
+        "images": 6,
+        "currency": "EUR",
+        "locale": "en",
+        "clarification": {
+          "policy": "auto"
+        }
+      }
+    },
+    {
+      "key": "POST /v2/rates",
+      "cli": "vistalink rates get",
+      "argv": [
+        "rates",
+        "get",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--hotels",
+        "[\"43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19\",{\"website_url\":\"https://umilta36.com\"}]",
+        "--stay",
+        "{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]}",
+        "--channel",
+        "direct",
+        "--freshness",
+        "cached",
+        "--max-age-hours",
+        "24",
+        "--currency",
+        "EUR"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "hotels": [
+          "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+          {
+            "website_url": "https://umilta36.com"
+          }
+        ],
+        "stay": {
+          "check_in": "2026-11-14",
+          "check_out": "2026-11-16",
+          "rooms": [
+            {
+              "adults": 2,
+              "children_ages": []
+            }
+          ]
+        },
+        "channel": "direct",
+        "freshness": "cached",
+        "max_age_hours": 24,
+        "currency": "EUR"
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
+      "key": "POST /v2/rates/batch",
+      "cli": "vistalink rates batch",
+      "argv": [
+        "rates",
+        "batch",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--hotels",
+        "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "--stays",
+        "[{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]}]",
+        "--channel",
+        "direct",
+        "--freshness",
+        "cached",
+        "--currency",
+        "EUR"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "hotels": [
+          "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19"
+        ],
+        "stays": [
+          {
+            "check_in": "2026-11-14",
+            "check_out": "2026-11-16",
+            "rooms": [
+              {
+                "adults": 2,
+                "children_ages": []
+              }
+            ]
+          }
+        ],
+        "channel": "direct",
+        "freshness": "cached",
+        "currency": "EUR"
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
+      "key": "POST /v2/rooms/reconcile",
+      "cli": "vistalink rooms reconcile",
+      "argv": [
+        "rooms",
+        "reconcile",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--hotel-id",
+        "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "--sources",
+        "[{\"kind\":\"website_url\",\"url\":\"https://umilta36.com/rooms\"},{\"kind\":\"rooms\",\"label\":\"partner_pms\",\"rooms\":[{\"key\":\"SUP-K\",\"name\":\"Superior King\",\"size_m2\":28,\"description\":\"City view\",\"max_occupancy\":2,\"bed_config\":[{\"type\":\"king\",\"count\":1}],\"images\":[\"https://partner.example/sup-k.jpg\"]}]}]",
+        "--min-confidence",
+        "0.5"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "sources": [
+          {
+            "kind": "website_url",
+            "url": "https://umilta36.com/rooms"
+          },
+          {
+            "kind": "rooms",
+            "label": "partner_pms",
+            "rooms": [
+              {
+                "key": "SUP-K",
+                "name": "Superior King",
+                "size_m2": 28,
+                "description": "City view",
+                "max_occupancy": 2,
+                "bed_config": [
+                  {
+                    "type": "king",
+                    "count": 1
+                  }
+                ],
+                "images": [
+                  "https://partner.example/sup-k.jpg"
+                ]
+              }
+            ]
+          }
+        ],
+        "min_confidence": 0.5
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
+      "key": "POST /v2/bookings",
+      "cli": "vistalink bookings create",
+      "argv": [
+        "bookings",
+        "create",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--hotel-id",
+        "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "--offer-id",
+        "off_t3c8e1a9b4f2d7e6a5c0b",
+        "--stay",
+        "{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]}",
+        "--guests",
+        "[{\"room\":0,\"lead\":{\"first_name\":\"Ada\",\"last_name\":\"Rossi\",\"email\":\"ada@example.com\",\"phone\":\"+390600000000\"},\"occupants\":[]}]",
+        "--payment",
+        "{\"mode\":\"handoff\",\"locale\":\"en\"}",
+        "--special-requests",
+        "Late arrival"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
+        "stay": {
+          "check_in": "2026-11-14",
+          "check_out": "2026-11-16",
+          "rooms": [
+            {
+              "adults": 2,
+              "children_ages": []
+            }
+          ]
+        },
+        "guests": [
+          {
+            "room": 0,
+            "lead": {
+              "first_name": "Ada",
+              "last_name": "Rossi",
+              "email": "ada@example.com",
+              "phone": "+390600000000"
+            },
+            "occupants": []
+          }
+        ],
+        "payment": {
+          "mode": "handoff",
+          "locale": "en"
+        },
+        "special_requests": "Late arrival"
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
+      "key": "GET /v2/bookings/{booking_id}",
+      "cli": "vistalink bookings get",
+      "argv": [
+        "bookings",
+        "get",
+        "bk_P2w9Xc4Rt1Lm8Qz3"
+      ],
+      "path": {
+        "booking_id": "bk_P2w9Xc4Rt1Lm8Qz3"
+      },
+      "query": {}
+    },
+    {
+      "key": "POST /v2/bookings/{booking_id}/cancel",
+      "cli": "vistalink bookings cancel",
+      "argv": [
+        "bookings",
+        "cancel",
+        "bk_P2w9Xc4Rt1Lm8Qz3"
+      ],
+      "path": {
+        "booking_id": "bk_P2w9Xc4Rt1Lm8Qz3"
+      },
+      "query": {}
+    },
+    {
+      "key": "GET /v2/jobs/{job_id}",
+      "cli": "vistalink jobs get",
+      "argv": [
+        "jobs",
+        "get",
+        "job_K8s2Lq9Wx4Np"
+      ],
+      "path": {
+        "job_id": "job_K8s2Lq9Wx4Np"
+      },
+      "query": {}
+    },
+    {
+      "key": "GET /v2/jobs/{job_id}/result",
+      "cli": "vistalink jobs result",
+      "argv": [
+        "jobs",
+        "result",
+        "job_K8s2Lq9Wx4Np"
+      ],
+      "path": {
+        "job_id": "job_K8s2Lq9Wx4Np"
+      },
+      "query": {}
+    },
+    {
+      "key": "GET /v2/jobs",
+      "cli": "vistalink jobs list",
+      "argv": [
+        "jobs",
+        "list",
+        "--cursor",
+        "MjAyNi0xMC0wN1QwOTozMDowMCswMDowMHxqb2JfSzhzMkxxOVd4NE5w"
+      ],
+      "path": {},
+      "query": {
+        "cursor": "MjAyNi0xMC0wN1QwOTozMDowMCswMDowMHxqb2JfSzhzMkxxOVd4NE5w"
+      }
+    },
+    {
+      "key": "POST /v2/jobs/{job_id}/cancel",
+      "cli": "vistalink jobs cancel",
+      "argv": [
+        "jobs",
+        "cancel",
+        "job_K8s2Lq9Wx4Np"
+      ],
+      "path": {
+        "job_id": "job_K8s2Lq9Wx4Np"
+      },
+      "query": {}
+    },
+    {
+      "key": "GET /v2/webhooks",
+      "cli": "vistalink webhooks list",
+      "argv": [
+        "webhooks",
+        "list"
+      ],
+      "path": {},
+      "query": {}
+    },
+    {
+      "key": "POST /v2/webhooks",
+      "cli": "vistalink webhooks create",
+      "argv": [
+        "webhooks",
+        "create",
+        "--url",
+        "https://partner.example/hooks/vistalink",
+        "--events",
+        "rates.completed,booking.updated"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "url": "https://partner.example/hooks/vistalink",
+        "events": [
+          "rates.completed",
+          "booking.updated"
+        ]
+      }
+    },
+    {
+      "key": "DELETE /v2/webhooks/{webhook_id}",
+      "cli": "vistalink webhooks delete",
+      "argv": [
+        "webhooks",
+        "delete",
+        "wh_N4c7Bz1Qk2Vt"
+      ],
+      "path": {
+        "webhook_id": "wh_N4c7Bz1Qk2Vt"
+      },
+      "query": {}
+    },
+    {
+      "key": "GET /v2/webhooks/{webhook_id}/deliveries",
+      "cli": "vistalink webhooks deliveries",
+      "argv": [
+        "webhooks",
+        "deliveries",
+        "wh_N4c7Bz1Qk2Vt",
+        "--cursor",
+        "MjAyNi0xMC0wN1QwOTozMDowMCswMDowMHx3aGRfUjJ0OE14NVFwMUx6"
+      ],
+      "path": {
+        "webhook_id": "wh_N4c7Bz1Qk2Vt"
+      },
+      "query": {
+        "cursor": "MjAyNi0xMC0wN1QwOTozMDowMCswMDowMHx3aGRfUjJ0OE14NVFwMUx6"
+      }
+    },
+    {
+      "key": "POST /v2/chat",
+      "cli": "vistalink chat send",
+      "argv": [
+        "chat",
+        "send",
+        "--message",
+        "Somewhere quiet near the Pantheon for two nights in November",
+        "--currency",
+        "EUR",
+        "--locale",
+        "en"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "message": "Somewhere quiet near the Pantheon for two nights in November",
+        "currency": "EUR",
+        "locale": "en"
+      }
+    },
+    {
+      "key": "GET /v2/amenities",
+      "cli": "vistalink catalog amenities",
+      "argv": [
+        "catalog",
+        "amenities"
+      ],
+      "path": {},
+      "query": {}
+    },
+    {
+      "key": "GET /v2/engines",
+      "cli": "vistalink catalog engines",
+      "argv": [
+        "catalog",
+        "engines"
+      ],
+      "path": {},
+      "query": {}
+    },
+    {
+      "key": "GET /v2/health",
+      "cli": "vistalink catalog health",
+      "argv": [
+        "catalog",
+        "health"
+      ],
+      "path": {},
+      "query": {}
+    },
+    {
+      "key": "GET /v2/openapi.json",
+      "cli": "vistalink catalog openapi",
+      "argv": [
+        "catalog",
+        "openapi"
+      ],
+      "path": {},
+      "query": {}
+    }
+  ]
+}

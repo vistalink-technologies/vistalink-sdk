@@ -1,0 +1,107 @@
+# Publish @vistalink/api, @vistalink/cli, vistalink (npm) and vistalink (PyPI)
+# from a v* tag. Not run yet: this repository has no remote.
+#
+# npm: provenance (npm publish --provenance) via GitHub OIDC. Uses npm trusted
+#   publishing when it is configured for each package on npmjs.com (npm >= 11.5.1,
+#   no token); otherwise falls back to the NPM_TOKEN secret. Trusted publishing
+#   can only be added to a package that exists, so the very first 0.0.x
+#   reservation is manual (scripts/reserve.sh).
+# PyPI: trusted publishing (pending publisher: project vistalink, this repo,
+#   workflow publish.yml, environment pypi). No token.
+#
+# 0.0.x versions publish under the npm dist-tag "reserve"; anything else under "latest".
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      npm_tag: ${{ steps.version.outputs.npm_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: astral-sh/setup-uv@v6
+      - name: Tag equals the package version, versions in step
+        id: version
+        run: |
+          set -euo pipefail
+          python3 scripts/sync_versions.py --check
+          V="$(node -p 'require("./packages/typescript/package.json").version')"
+          [ "${GITHUB_REF_NAME}" = "v${V}" ] || { echo "tag ${GITHUB_REF_NAME} != v${V}"; exit 1; }
+          echo "version=${V}" >> "$GITHUB_OUTPUT"
+          case "$V" in 0.0.*) echo "npm_tag=reserve" >> "$GITHUB_OUTPUT" ;; *) echo "npm_tag=latest" >> "$GITHUB_OUTPUT" ;; esac
+      - run: pnpm install --frozen-lockfile
+      - run: scripts/regenerate.sh --test
+      - name: Generated code is committed
+        run: git diff --exit-code
+
+  npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # npm provenance + trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, registry-url: "https://registry.npmjs.org" }
+      - run: npm install -g npm@^11.5.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @vistalink/api run build && pnpm --filter @vistalink/cli run build
+      # pnpm pack rewrites workspace:* to the real version; npm publish then
+      # uploads the tarball with a provenance attestation. Order: SDK, CLI, unscoped.
+      - name: Pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          for p in @vistalink/api @vistalink/cli vistalink; do
+            pnpm --filter "$p" pack --pack-destination "$RUNNER_TEMP/pack"
+          done
+          ls -l "$RUNNER_TEMP/pack"
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          V: ${{ needs.verify.outputs.version }}
+          TAG: ${{ needs.verify.outputs.npm_tag }}
+        run: |
+          set -euo pipefail
+          for t in "vistalink-api-${V}.tgz" "vistalink-cli-${V}.tgz" "vistalink-${V}.tgz"; do
+            npm publish "$RUNNER_TEMP/pack/$t" --provenance --access public --tag "$TAG"
+          done
+
+  pypi:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build and check
+        run: |
+          python -m pip install "build>=1.2" "twine>=6.1"
+          cd packages/python
+          python -m build
+          twine check --strict dist/*
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: packages/python/dist }

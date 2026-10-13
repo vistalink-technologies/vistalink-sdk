@@ -1,0 +1,13 @@
+{
+  "name": "vistalink-sdk",
+  "private": true,
+  "description": "VistaLink API v2 SDKs (TypeScript, Python) and CLI, generated from spec/openapi.v2.json",
+  "packageManager": "pnpm@10.18.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "generate": "pnpm -r run generate",
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck"
+  }
+}

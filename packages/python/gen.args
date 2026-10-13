@@ -1,0 +1,15 @@
+--input-file-type openapi
+--output-model-type pydantic_v2.BaseModel
+--target-python-version 3.10
+--use-standard-collections
+--use-union-operator
+--enum-field-as-literal all
+--use-annotated
+--use-schema-description
+--allow-extra-fields
+--use-double-quotes
+--disable-timestamp
+--use-default-kwarg
+--formatters black isort
+--collapse-root-models
+--field-constraints

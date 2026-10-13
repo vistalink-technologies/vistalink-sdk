@@ -1,0 +1,45 @@
+{
+  "name": "vistalink",
+  "version": "0.0.1",
+  "description": "The VistaLink command line. Installs @vistalink/cli; prefer `npm install -g @vistalink/cli`.",
+  "homepage": "https://vistalink.com/developers",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vistalink-technologies/vistalink-sdk.git",
+    "directory": "packages/vistalink-unscoped"
+  },
+  "bugs": {
+    "url": "https://github.com/vistalink-technologies/vistalink-sdk/issues"
+  },
+  "author": "VistaLink",
+  "license": "MIT",
+  "keywords": [
+    "vistalink",
+    "hotels",
+    "travel",
+    "api",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "bin": {
+    "vistalink": "./bin/vistalink.js"
+  },
+  "files": [
+    "bin/vistalink.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/shim.test.mjs",
+    "prepublishOnly": "pnpm --filter @vistalink/cli run prepublishOnly && pnpm run test"
+  },
+  "dependencies": {
+    "@vistalink/cli": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
