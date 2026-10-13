@@ -41,9 +41,11 @@ npm whoami
 #    the account has 2FA for writes.
 pnpm --filter @vistalink/api publish --tag reserve --access public --no-git-checks
 pnpm --filter @vistalink/cli publish --tag reserve --access public --no-git-checks
-pnpm --filter vistalink      publish --tag reserve --access public --no-git-checks
+# Unscoped "vistalink": npm refuses the name (403, too similar to "vitalik")
+# until npm support grants an exception. Run this line only after that.
+# pnpm --filter vistalink      publish --tag reserve --access public --no-git-checks
 
-npm view @vistalink/api dist-tags && npm view @vistalink/cli dist-tags && npm view vistalink dist-tags
+npm view @vistalink/api dist-tags && npm view @vistalink/cli dist-tags
 
 # 3. PyPI: build, check, upload. twine asks for the username (__token__) and an
 #    API token from https://pypi.org/manage/account/token/ (account-scoped:
