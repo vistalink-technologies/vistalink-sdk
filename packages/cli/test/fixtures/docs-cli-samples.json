@@ -1,5 +1,5 @@
 {
-  "source": "vistalink.com claude/developers-endpoint-refactor-bd1a89@c8f9b1e content/openapi.v2.json (cliSample in lib/api-docs-text.ts; render-default parameters only)",
+  "source": "vistalink.com developer docs, content/openapi.v2.json (cliSample in lib/api-docs-text.ts; render-default parameters only)",
   "samples": [
     {
       "key": "POST /v2/hotels/resolve",

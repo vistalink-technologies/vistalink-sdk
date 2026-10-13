@@ -656,6 +656,7 @@ export interface components {
          *         "free_cancellation": false,
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
+         *         "member_rate": false,
          *         "nightly_avg": "481.00",
          *         "observed_at": "2026-10-07T09:30:00Z",
          *         "occupancy": {
@@ -704,6 +705,7 @@ export interface components {
          *         "free_cancellation": false,
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
+         *         "member_rate": false,
          *         "nightly_avg": "481.00",
          *         "observed_at": "2026-10-07T09:30:00Z",
          *         "occupancy": {
@@ -771,6 +773,7 @@ export interface components {
          *         "free_cancellation": false,
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
+         *         "member_rate": false,
          *         "nightly_avg": "481.00",
          *         "observed_at": "2026-10-07T09:30:00Z",
          *         "occupancy": {
@@ -1351,7 +1354,7 @@ export interface components {
             id: string;
             /**
              * Field
-             * @description The criterion that is ambiguous; `location` (a city or landmark with several matches) is the only one asked today.
+             * @description The criterion that is ambiguous or missing; `location` (a city or landmark with several matches, or no place at all) is the only one asked today.
              */
             field: string;
             /**
@@ -1361,14 +1364,14 @@ export interface components {
             question: string;
             /**
              * Answer Type
-             * @description How to answer; `single_choice` (pick one of `options`) is the only type used today.
+             * @description How to answer: `single_choice` (send one of `options` as `option_id`) or `free_text` (no options; send the traveller's answer as `value`, for example a city when the search named no place).
              * @default single_choice
              * @enum {string}
              */
-            answer_type?: "single_choice" | "multi_choice" | "free_text";
+            answer_type?: "single_choice" | "free_text";
             /**
              * Options
-             * @description The possible answers, at least two.
+             * @description The possible answers: at least two for `single_choice`, none for `free_text`.
              */
             options?: components["schemas"]["ClarificationOption"][];
         };
@@ -1384,9 +1387,14 @@ export interface components {
             clarification_id: string;
             /**
              * Option Id
-             * @description The chosen `clarifications[].options[].id`.
+             * @description The chosen `clarifications[].options[].id`, for a `single_choice` question.
              */
-            option_id: string;
+            option_id?: string | null;
+            /**
+             * Value
+             * @description The answer in the traveller's words, for a `free_text` question, for example `Lisbon`.
+             */
+            value?: string | null;
         };
         /**
          * ClarificationOption
@@ -2122,6 +2130,7 @@ export interface components {
          *                 "free_cancellation": false,
          *                 "includes_taxes": true,
          *                 "listing_key": "engine_room:1234567",
+         *                 "member_rate": false,
          *                 "nightly_avg": "481.00",
          *                 "observed_at": "2026-10-07T09:30:00Z",
          *                 "occupancy": {
@@ -2191,6 +2200,7 @@ export interface components {
          *               "free_cancellation": false,
          *               "includes_taxes": true,
          *               "listing_key": "engine_room:1234567",
+         *               "member_rate": false,
          *               "nightly_avg": "481.00",
          *               "observed_at": "2026-10-07T09:30:00Z",
          *               "occupancy": {
@@ -2495,6 +2505,7 @@ export interface components {
          *                         "free_cancellation": false,
          *                         "includes_taxes": true,
          *                         "listing_key": "engine_room:1234567",
+         *                         "member_rate": false,
          *                         "nightly_avg": "481.00",
          *                         "observed_at": "2026-10-07T09:30:00Z",
          *                         "occupancy": {
@@ -2728,6 +2739,7 @@ export interface components {
          *       "free_cancellation": false,
          *       "includes_taxes": true,
          *       "listing_key": "engine_room:1234567",
+         *       "member_rate": false,
          *       "nightly_avg": "481.00",
          *       "observed_at": "2026-10-07T09:30:00Z",
          *       "occupancy": {
@@ -2814,6 +2826,11 @@ export interface components {
              * @description True when the rate can be canceled free of charge, false when it is non-refundable, null when unknown.
              */
             free_cancellation?: boolean | null;
+            /**
+             * Member Rate
+             * @description True when the price is a member or loyalty rate that needs the guest signed in to the hotel's programme, false for a public rate, null when the source does not say. Member rates are listed so you see the hotel's full offer list; within a room they sort after public rates, and `POST /v2/bookings` accepts public rates only.
+             */
+            member_rate?: boolean | null;
             /**
              * Cancellation Deadline
              * @description Last moment to cancel free of charge, RFC 3339; set only on offers read live, null otherwise.
@@ -3212,6 +3229,7 @@ export interface components {
          *                   "free_cancellation": false,
          *                   "includes_taxes": true,
          *                   "listing_key": "engine_room:1234567",
+         *                   "member_rate": false,
          *                   "nightly_avg": "481.00",
          *                   "observed_at": "2026-10-07T09:30:00Z",
          *                   "occupancy": {
@@ -4076,7 +4094,7 @@ export interface components {
          *         "budget": {
          *           "basis": "per_room_per_night",
          *           "currency": "EUR",
-         *           "max": "400",
+         *           "max": "500",
          *           "min": "100"
          *         },
          *         "location": {
@@ -4104,7 +4122,7 @@ export interface components {
          *         ],
          *         "text": "romantic, great breakfast"
          *       },
-         *       "query": "quiet place near the Colosseum with a rooftop, under 400 a night",
+         *       "query": "quiet place near the Trevi Fountain with a rooftop, under 500 a night",
          *       "ranking": "semantic",
          *       "rates": "cached"
          *     }
@@ -4247,7 +4265,7 @@ export interface components {
          *         "budget": {
          *           "basis": "per_room_per_night",
          *           "currency": "EUR",
-         *           "max": "400",
+         *           "max": "500",
          *           "origin": "query"
          *         },
          *         "location": {
@@ -4257,14 +4275,7 @@ export interface components {
          *           "origin": "filters",
          *           "place_id": "rome-it"
          *         },
-         *         "overrides": [
-         *           {
-         *             "field": "location",
-         *             "filters_said": "Lisbon",
-         *             "query_said": "Paris",
-         *             "used": "filters"
-         *           }
-         *         ],
+         *         "overrides": [],
          *         "stay": {
          *           "check_in": "2026-11-14",
          *           "check_out": "2026-11-16",
@@ -4678,7 +4689,7 @@ export interface components {
         Warning_: {
             /**
              * Code
-             * @description Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), and on rates `currency_unavailable`.
+             * @description Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), and on rates `currency_unavailable`.
              */
             code: string;
             /**
@@ -5010,6 +5021,7 @@ export interface components {
          *                       "free_cancellation": false,
          *                       "includes_taxes": true,
          *                       "listing_key": "engine_room:1234567",
+         *                       "member_rate": false,
          *                       "nightly_avg": "481.00",
          *                       "observed_at": "2026-10-07T09:30:00Z",
          *                       "occupancy": {
