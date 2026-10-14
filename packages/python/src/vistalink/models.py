@@ -1293,8 +1293,12 @@ class Health(BaseModel):
         ),
     ]
     version: Annotated[
-        str | None, Field(description="API version, `2.0`.", title="Version")
-    ] = "2.0"
+        str | None,
+        Field(
+            description="API version, `2.1.0`; the OpenAPI document's `info.version`.",
+            title="Version",
+        ),
+    ] = "2.1.0"
     checks: Annotated[
         dict[str, Literal["ok", "unavailable"]] | None,
         Field(
@@ -3402,8 +3406,8 @@ class Versions(BaseModel):
         extra="allow",
     )
     contract: Annotated[
-        str | None, Field(description="API contract version, `2.0`.", title="Contract")
-    ] = "2.0"
+        str | None, Field(description="API contract version, `2.1`.", title="Contract")
+    ] = "2.1"
     ranking: Annotated[
         str | None,
         Field(

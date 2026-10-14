@@ -1,6 +1,6 @@
 {
   "name": "@vistalink/cli",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "vistalink: command line for the VistaLink hotel API v2",
   "homepage": "https://vistalink.com/developers",
   "repository": {
