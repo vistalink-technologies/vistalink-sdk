@@ -9,6 +9,26 @@ import { DELIVERY_HEADERS, RENDERERS, deliveryRow, renderJob } from "./render.js
 
 export const DASHBOARD_URL = "https://vistalink.com/developers/dashboard";
 
+/**
+ * A pasted key, cleaned of what terminals and copy buttons add: bracketed-paste markers
+ * (ESC[200~ … ESC[201~), other control bytes, surrounding quotes, a "Bearer " prefix, whitespace.
+ */
+export function normalizePastedKey(raw: string): string {
+  let k = raw.replace(/\u001b\[20[01]~/g, "").replace(/\u001b\[[0-9;?]*[A-Za-z~]/g, "");
+  k = k.replace(/[\u0000-\u001f\u007f]/g, "").trim().replace(/^["'`]+|["'`]+$/g, "").trim();
+  if (/^bearer\s+/i.test(k)) k = k.replace(/^bearer\s+/i, "").trim();
+  return k;
+}
+
+/** Why a value is not a usable key, without echoing it (it may be a real secret). */
+export function keyRejection(key: string): string | null {
+  if (!key) return "Nothing was received. Paste the key (input is hidden), then press Enter.";
+  if (/^vl_(live|test)_/.test(key) && /…|\.\.\./.test(key))
+    return `That is the key PREFIX shown in the key list (${key.length} characters), not the full key. Copy the full key from the box shown once when the key is created, or create a new key: ${DASHBOARD_URL}`;
+  if (/^vl_(live|test)_\S+$/.test(key)) return null;
+  return `That does not look like a VistaLink key: ${key.length} characters, starting ${JSON.stringify(key.slice(0, 3))}. Keys start vl_live_ or vl_test_. Create one at ${DASHBOARD_URL}`;
+}
+
 export interface Deps {
   stdout: (s: string) => void;
   stderr: (s: string) => void;
@@ -250,6 +270,8 @@ export function buildProgram(deps: Deps): Command {
     webhooks: "webhook endpoints and deliveries",
     chat: "conversational search",
     catalog: "amenity codes, booking engines, health, the OpenAPI document",
+    quotes: "ask a hotel by email for a direct price: create, get, cancel, accept an offer",
+    credentials: "register a payment credential for a card-entry booking",
   };
 
   // Generic commands, one per operation, with per-operation extensions.
@@ -497,8 +519,9 @@ export function buildProgram(deps: Deps): Command {
       .option("--no-verify", "store without checking the key against the API"),
     deps,
     async (ctx, _a, opts) => {
-      const key = (await deps.readSecret("VistaLink API key (vl_live_… or vl_test_…): ")).trim();
-      if (!/^vl_(live|test)_\S+$/.test(key)) throw new CliError("That does not look like a VistaLink key (vl_live_… or vl_test_…)");
+      const key = normalizePastedKey(await deps.readSecret("VistaLink API key (vl_live_… or vl_test_…, input hidden): "));
+      const rejection = keyRejection(key);
+      if (rejection) throw new CliError(rejection);
       if (opts.verify !== false) await ctx.client(true, key).jobs.list({ limit: 1 });
       const meta = deps.store.save(ctx.profile, key, ctx.globals.baseUrl);
       if (ctx.globals.json) deps.stdout(json({ profile: ctx.profile, ...meta }));

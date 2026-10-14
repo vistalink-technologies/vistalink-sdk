@@ -2466,7 +2466,7 @@ export interface components {
          *       },
          *       "request_id": "req_8f2c1a9b3d4e5f60",
          *       "status": "ok",
-         *       "version": "2.0"
+         *       "version": "2.1.0"
          *     }
          */
         Health: {
@@ -2478,8 +2478,8 @@ export interface components {
             status: "ok" | "degraded";
             /**
              * Version
-             * @description API version, `2.0`.
-             * @default 2.0
+             * @description API version, `2.1.0`; the OpenAPI document's `info.version`.
+             * @default 2.1.0
              */
             version?: string;
             /**
@@ -5424,7 +5424,7 @@ export interface components {
          *       "status": "completed",
          *       "total_estimate": 143,
          *       "versions": {
-         *         "contract": "2.0",
+         *         "contract": "2.1",
          *         "ranking": "r2026.10"
          *       },
          *       "warnings": [
@@ -5777,8 +5777,8 @@ export interface components {
         Versions: {
             /**
              * Contract
-             * @description API contract version, `2.0`.
-             * @default 2.0
+             * @description API contract version, `2.1`.
+             * @default 2.1
              */
             contract?: string;
             /**

@@ -1,6 +1,6 @@
 {
   "name": "vistalink",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "The VistaLink command line. Installs @vistalink/cli; prefer `npm install -g @vistalink/cli`.",
   "homepage": "https://vistalink.com/developers",
   "repository": {

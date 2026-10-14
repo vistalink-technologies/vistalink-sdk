@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from . import models as m
 from ._errors import VistaLinkError
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 DEFAULT_BASE_URL = "https://api.vistalink.com"
 JOB_TERMINAL = frozenset({"succeeded", "failed", "canceled"})
 #: Booking states that never change again.

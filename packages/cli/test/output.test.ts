@@ -134,6 +134,27 @@ describe("login, keys, openapi", () => {
     expect(h2.store.profiles()).toEqual({});
   });
 
+  it("login accepts a key as terminals paste it", async () => {
+    for (const secret of ["\u001b[200~vl_test_abcdefghijklmnop\u001b[201~\r", '  "vl_test_abcdefghijklmnop"  ', "Bearer vl_test_abcdefghijklmnop"]) {
+      const h = harness([{ status: 200, body: { request_id: "r", jobs: [] } }], { withKey: false, secret });
+      expect(await h.run(["login"])).toBe(0);
+      expect(h.store.load("default")?.key).toBe("vl_test_abcdefghijklmnop");
+    }
+  });
+
+  it("login says WHY a value is not a key, without echoing it", async () => {
+    const empty = harness([], { withKey: false, secret: "\n" });
+    expect(await empty.run(["login"])).toBe(2);
+    expect(empty.err).toContain("Nothing was received");
+    const prefix = harness([], { withKey: false, secret: "vl_test_ab12…" });
+    expect(await prefix.run(["login"])).toBe(2);
+    expect(prefix.err).toContain("PREFIX");
+    const other = harness([], { withKey: false, secret: "sk_live_supersecretvalue" });
+    expect(await other.run(["login"])).toBe(2);
+    expect(other.err).toContain('starting "sk_"');
+    expect(other.err).not.toContain("supersecret");
+  });
+
   it("keys create/revoke point at the dashboard (exit 11)", async () => {
     const h = harness();
     expect(await h.run(["keys", "create"])).toBe(11);
@@ -159,5 +180,16 @@ describe("login, keys, openapi", () => {
   it("maskKey", () => {
     expect(maskKey("vl_test_1234567890")).toBe("vl_test_1234…7890");
     expect(maskKey("vl_live_short")).toBe("vl_live_*****");
+  });
+});
+
+describe("help", () => {
+  it("every command group has a real description, not its own name (2026-10-14: `quotes — quotes`)", async () => {
+    const h = harness([], { withKey: false });
+    await h.run(["--help"]);
+    const text = h.out + h.err;
+    const groups = [...text.matchAll(/^\s{2}([a-z]+)\s{2,}(.+)$/gm)].map((m) => [m[1], m[2].trim()]);
+    expect(groups.length).toBeGreaterThan(8);
+    for (const [name, desc] of groups) expect(desc, name).not.toBe(name);
   });
 });
