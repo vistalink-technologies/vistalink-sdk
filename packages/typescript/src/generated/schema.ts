@@ -135,9 +135,49 @@ export interface paths {
         put?: never;
         /**
          * Create a booking
-         * @description Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`; bookings are free and `billing` is always null. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page).
+         * @description Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`; bookings are free and `billing` is always null. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page). `card_entry` is rolling out and answers 403 `not_yet_available` in production: it needs `payment_method` and `mandate`, answers `requires_credential`, and nothing touches the hotel until `POST /v2/bookings/{booking_id}/confirm`.
          */
         post: operations["createBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/bookings/{booking_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a card-entry booking
+         * @description Rolling out; answers 403 not_yet_available in production. `card_entry` only: attaches the credential (or uses the one bound at create) and starts the booking on the hotel's own checkout, where the card is typed and the hotel charges it as merchant of record. Answers 202 with the Booking in `queued`; follow it with GET /v2/bookings/{booking_id} or `booking.updated`. Accepted only in `requires_credential` and only once: any other status, including `submitted` and `unknown`, is 409 `booking_not_confirmable`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`. Test keys get a simulated outcome chosen by the credential's test token.
+         */
+        post: operations["confirmBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/payment_credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a payment credential
+         * @description Rolling out; answers 403 not_yet_available in production. Turns a Basis Theory card token you created with VistaLink's public key into a one-booking `cred_` credential for `payment.mode card_entry`. The card number never reaches VistaLink: we read the token masked and keep only brand, last four and expiry. A credential lasts 30 minutes (or less, with the token), pays for one booking, and its vault token is deleted once that booking is submitted or ends. Needs the `booking` scope and the Build plan or higher; `Idempotency-Key` is optional.
+         */
+        post: operations["createPaymentCredential"];
         delete?: never;
         options?: never;
         head?: never;
@@ -175,9 +215,89 @@ export interface paths {
         put?: never;
         /**
          * Cancel a booking
-         * @description Synchronous and free; needs the `booking` scope. Allowed while the booking is `queued`, `requires_payment` or `requires_user_action`, and while `processing` only before the engine submit step; after that the cancel is refused with 409 `conflict`. Canceling after a completed checkout payment sets `payment.refund_required: true`.
+         * @description Synchronous and free; needs the `booking` scope. Allowed while the booking is `queued`, `requires_payment`, `requires_user_action` or `requires_credential`, and while `processing` only before the engine submit step; after that the cancel is refused with 409 `conflict`. Canceling after a completed checkout payment sets `payment.refund_required: true`.
          */
         post: operations["cancelBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a quote from a hotel
+         * @description Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone: a simulated hotel answers within seconds, as `sandbox_outcome` says.
+         */
+        post: operations["createQuote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/quotes/{quote_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a quote
+         * @description Synchronous and free; needs the `quotes` scope. The quote's status, the hotel's offers and `next_step`, one sentence you can show as is.
+         */
+        get: operations["getQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/quotes/{quote_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a quote
+         * @description Synchronous and free; needs the `quotes` scope. Stops further emails to the hotel while the quote is `queued`, `contacting`, `waiting` or `offer_received`; cancelling twice returns the cancelled quote. A quote cancelled before a priced offer costs nothing; one cancelled after keeps its charge. A closed quote answers 409 `conflict`.
+         */
+        post: operations["cancelQuote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v2/quotes/{quote_id}/offers/{offer_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a quote offer
+         * @description Free; needs the `quotes` scope and the Build plan or higher. Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).
+         */
+        post: operations["acceptQuoteOffer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -279,7 +399,7 @@ export interface paths {
         put?: never;
         /**
          * Create a webhook
-         * @description Synchronous and free; each event needs its family's scope (`booking.updated` needs `booking`, `rates.*` need `rates`, `rooms.reconcile.completed` needs `reconcile`). Deliveries are signed POSTs described under Webhooks, retried after 1m, 5m, 30m, 2h, 12h and 24h; the `secret` is returned only in this response.
+         * @description Synchronous and free; each event needs its family's scope (`booking.updated` needs `booking`, `rates.*` need `rates`, `rooms.reconcile.completed` needs `reconcile`, `quote.updated` needs `quotes`). Deliveries are signed POSTs described under Webhooks, retried after 1m, 5m, 30m, 2h, 12h and 24h; the `secret` is returned only in this response.
          */
         post: operations["createWebhook"];
         delete?: never;
@@ -501,9 +621,29 @@ export interface webhooks {
         put?: never;
         /**
          * booking.updated
-         * @description Every change to a booking's `status` or `payment.status`. `data` is the Booking.
+         * @description Every change to a booking's `status` or `payment.status`, and for `card_entry` to `next_action`. `data` is the Booking; its `payment_method` carries no card data (only `type`, `credential_id`, `credential_status`), and a `card_entry` booking's `version` orders events.
          */
         post: operations["onBookingUpdated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "quote.updated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * quote.updated
+         * @description Every change to a quote's `status`, each new offer from the hotel and the acceptance. `data` is the Quote.
+         */
+        post: operations["onQuoteUpdated"];
         delete?: never;
         options?: never;
         head?: never;
@@ -813,6 +953,96 @@ export interface components {
          *         }
          *       ]
          *     }
+         * @example {
+         *       "booking_id": "bk_C4r9Dn2Ty7Ek5Pw1",
+         *       "charges": {
+         *         "amount": "962.00",
+         *         "currency": "EUR",
+         *         "mismatch": false
+         *       },
+         *       "commission": {
+         *         "commissionable": true,
+         *         "partner_share": "0.50",
+         *         "rate": "0.10"
+         *       },
+         *       "confirmation": {
+         *         "at": "2026-10-07T09:31:20Z",
+         *         "code": "RX48219",
+         *         "evidence": "engine_confirmation_signal"
+         *       },
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "mandate": {
+         *         "accepted_total": "962.00",
+         *         "consent_at": "2026-10-07T09:29:12Z",
+         *         "currency": "EUR",
+         *         "expires_at": "2026-10-07T09:59:30Z",
+         *         "max_total": "962.00"
+         *       },
+         *       "offer": {
+         *         "availability": "available",
+         *         "board": "breakfast",
+         *         "channel": "direct",
+         *         "currency": "EUR",
+         *         "engine": "SYNXIS",
+         *         "excluded_charges": [],
+         *         "free_cancellation": false,
+         *         "includes_taxes": true,
+         *         "listing_key": "engine_room:1234567",
+         *         "member_rate": false,
+         *         "nightly_avg": "481.00",
+         *         "observed_at": "2026-10-07T09:30:00Z",
+         *         "occupancy": {
+         *           "adults": 2,
+         *           "children_ages": []
+         *         },
+         *         "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
+         *         "rate_name": "Non-refundable, breakfast included",
+         *         "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
+         *         "room_name": "Superior Room",
+         *         "total": "962.00",
+         *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *       },
+         *       "payment_method": {
+         *         "brand": "visa",
+         *         "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1",
+         *         "credential_status": "deleted",
+         *         "exp_month": 12,
+         *         "exp_year": 2028,
+         *         "last4": "4242",
+         *         "type": "card"
+         *       },
+         *       "revalidation": {
+         *         "checked_at": "2026-10-07T09:30:05Z",
+         *         "currency": "EUR",
+         *         "price_changed": false,
+         *         "total": "962.00"
+         *       },
+         *       "status": "confirmed",
+         *       "submitted_at": "2026-10-07T09:31:02Z",
+         *       "timeline": [
+         *         {
+         *           "at": "2026-10-07T09:29:30Z",
+         *           "state": "requires_credential"
+         *         },
+         *         {
+         *           "at": "2026-10-07T09:30:00Z",
+         *           "state": "queued"
+         *         },
+         *         {
+         *           "at": "2026-10-07T09:30:01Z",
+         *           "state": "processing"
+         *         },
+         *         {
+         *           "at": "2026-10-07T09:31:02Z",
+         *           "state": "submitted"
+         *         },
+         *         {
+         *           "at": "2026-10-07T09:31:20Z",
+         *           "state": "confirmed"
+         *         }
+         *       ],
+         *       "version": 6
+         *     }
          */
         Booking: {
             /**
@@ -827,10 +1057,10 @@ export interface components {
             booking_id: string;
             /**
              * Status
-             * @description Where the booking is: `queued`, `processing`, `requires_payment` (show `payment.checkout_url`), `requires_user_action` (send the guest to `handoff.url`), then `confirmed`, `confirmation_pending` (submitted, confirmation not yet seen), `failed`, `expired` or `canceled`.
+             * @description Where the booking is: `queued`, `processing`, `requires_payment` (show `payment.checkout_url`), `requires_user_action` (send the guest to `handoff.url`), then `confirmed`, `confirmation_pending` (submitted, confirmation not yet seen), `failed`, `expired` or `canceled`. Only `card_entry` bookings also use `requires_credential` (waiting for confirm), `submitted` (the hotel's pay button was pressed), `requires_action` (see `next_action`) and `unknown` (submitted, outcome not yet provable: tell the guest not to book again and to check their email from the hotel).
              * @enum {string}
              */
-            status: "queued" | "processing" | "requires_payment" | "requires_user_action" | "confirmed" | "confirmation_pending" | "failed" | "expired" | "canceled";
+            status: "queued" | "processing" | "requires_payment" | "requires_user_action" | "confirmed" | "confirmation_pending" | "failed" | "expired" | "canceled" | "requires_credential" | "submitted" | "requires_action" | "unknown";
             /**
              * Hotel Id
              * Format: uuid
@@ -853,7 +1083,7 @@ export interface components {
             commission?: components["schemas"]["Commission"] | null;
             /**
              * Timeline
-             * @description Every status the booking has been in, oldest first, starting with `queued`.
+             * @description Every status the booking has been in, oldest first, starting with `queued` (`requires_credential` for `card_entry`).
              */
             timeline?: components["schemas"]["TimelineEntry"][];
             /**
@@ -861,6 +1091,50 @@ export interface components {
              * @description Always null: bookings are free.
              */
             billing?: null;
+            /**
+             * Version
+             * @description `card_entry` only: goes up by one on every change; apply a `booking.updated` event only when its `data.version` is higher than the last one you saw.
+             */
+            version?: number | null;
+            /** @description `card_entry` only: what the guest approved. */
+            mandate?: components["schemas"]["BookingMandate"] | null;
+            /** @description `card_entry` only: the card's brand, last four and expiry. */
+            payment_method?: components["schemas"]["BookingPaymentMethod"] | null;
+            /** @description `card_entry` only: set exactly when `status` is `requires_action`. */
+            next_action?: components["schemas"]["NextAction"] | null;
+            /** @description `card_entry` only: the total the hotel's checkout showed. */
+            charges?: components["schemas"]["BookingCharges"] | null;
+            /**
+             * Submitted At
+             * @description `card_entry` only: when the hotel's pay button was pressed. Once set, the booking is never resubmitted and cannot be canceled.
+             */
+            submitted_at?: string | null;
+            /**
+             * Expires At
+             * @description `card_entry` only: in `requires_credential`, the deadline to confirm; null otherwise.
+             */
+            expires_at?: string | null;
+        };
+        /**
+         * BookingCharges
+         * @description `card_entry` only: the amount the hotel's checkout showed, read in code, never typed by a model.
+         */
+        BookingCharges: {
+            /**
+             * Amount
+             * @description The engine's total, a decimal string.
+             */
+            amount?: string | null;
+            /**
+             * Currency
+             * @description ISO 4217 currency of `amount`.
+             */
+            currency?: string | null;
+            /**
+             * Mismatch
+             * @description True when the engine reported a charge above `mandate.max_total` after submit; ops is alerted.
+             */
+            mismatch?: boolean | null;
         };
         /**
          * BookingFailure
@@ -870,10 +1144,10 @@ export interface components {
         BookingFailure: {
             /**
              * Reason
-             * @description Stable failure code: `sold_out`, `price_changed` (revalidation), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`).
+             * @description Stable failure code: `sold_out`, `price_changed` (revalidation, or with `card_entry` the hotel's checkout total was above the accepted total; nothing was typed), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`). `card_entry` only: `card_declined` (the hotel's checkout declined the card; create a new booking with a new credential), `three_d_secure_failed`, `card_entry_failed` (stopped before the pay button; nothing was charged), `card_entry_unavailable` (card entry is not available for this engine right now), and `mandate_expired` on `expired` (not confirmed within 30 minutes).
              * @enum {string}
              */
-            reason: "sold_out" | "price_changed" | "price_changed_at_payment" | "engine_blocked" | "handoff_expired" | "payment_expired" | "payment_failed" | "unsupported_engine" | "payment_unavailable";
+            reason: "sold_out" | "price_changed" | "price_changed_at_payment" | "engine_blocked" | "handoff_expired" | "payment_expired" | "payment_failed" | "unsupported_engine" | "payment_unavailable" | "card_declined" | "three_d_secure_failed" | "card_entry_failed" | "card_entry_unavailable" | "mandate_expired";
             /**
              * Message
              * @description One English sentence explaining the failure.
@@ -897,6 +1171,39 @@ export interface components {
              * @description Other guests in the room, up to 16; kept with the booking but not sent to the engine.
              */
             occupants?: components["schemas"]["Occupant"][];
+        };
+        /**
+         * BookingMandate
+         * @description `card_entry` only: what the guest approved.
+         */
+        BookingMandate: {
+            /**
+             * Accepted Total
+             * @description The total the guest accepted, in `currency`.
+             */
+            accepted_total: string;
+            /**
+             * Currency
+             * @description ISO 4217 currency.
+             */
+            currency: string;
+            /**
+             * Max Total
+             * @description The most the hotel's checkout may show before the card is typed; equals `accepted_total`.
+             */
+            max_total: string;
+            /**
+             * Consent At
+             * Format: date-time
+             * @description When the guest approved, as you sent it.
+             */
+            consent_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description The mandate's deadline: confirm before it, 30 minutes after create.
+             */
+            expires_at: string;
         };
         /**
          * BookingPayment
@@ -953,6 +1260,48 @@ export interface components {
              * @description True when the guest's checkout payment completed and the booking will not be made, so the payment must be reversed by the checkout provider: canceled before the engine step, failed with `price_changed_at_payment`, or the amount paid did not match the booking (`payment_failed`); null otherwise.
              */
             refund_required?: boolean | null;
+        };
+        /**
+         * BookingPaymentMethod
+         * @description `card_entry` only: the card's metadata. Never the card number or CVC.
+         */
+        BookingPaymentMethod: {
+            /**
+             * Type
+             * @description Always `card`.
+             * @constant
+             */
+            type: "card";
+            /**
+             * Credential Id
+             * @description The `cred_` id; null until bound.
+             */
+            credential_id?: string | null;
+            /**
+             * Brand
+             * @description Card brand, for example `visa`.
+             */
+            brand?: string | null;
+            /**
+             * Last4
+             * @description Last four digits.
+             */
+            last4?: string | null;
+            /**
+             * Exp Month
+             * @description Expiry month.
+             */
+            exp_month?: number | null;
+            /**
+             * Exp Year
+             * @description Expiry year.
+             */
+            exp_year?: number | null;
+            /**
+             * Credential Status
+             * @description The credential's status; see `PaymentCredential.status`.
+             */
+            credential_status?: ("active" | "bound" | "consumed" | "deleted") | null;
         };
         /**
          * BookingRequest
@@ -1020,6 +1369,51 @@ export interface components {
          *         ]
          *       }
          *     }
+         * @example {
+         *       "guests": [
+         *         {
+         *           "lead": {
+         *             "email": "ada@example.com",
+         *             "first_name": "Ada",
+         *             "last_name": "Rossi",
+         *             "phone": "+390600000000"
+         *           },
+         *           "occupants": [],
+         *           "room": 0
+         *         }
+         *       ],
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "mandate": {
+         *         "accepted_total": "962.00",
+         *         "consent": {
+         *           "cardholder_authorized": true,
+         *           "display_hash": "sha256:9b1e5c0d2a7f43e8b6c1d9a04f7e2b3c5d8a1f6e0b9c2d7a4e3f1b8c6d5a0e9f",
+         *           "method": "explicit_ui_confirmation",
+         *           "obtained_at": "2026-10-07T09:29:12Z"
+         *         },
+         *         "currency": "EUR"
+         *       },
+         *       "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
+         *       "payment": {
+         *         "locale": "en",
+         *         "mode": "card_entry"
+         *       },
+         *       "payment_method": {
+         *         "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1",
+         *         "type": "card"
+         *       },
+         *       "special_requests": "Late arrival",
+         *       "stay": {
+         *         "check_in": "2026-11-14",
+         *         "check_out": "2026-11-16",
+         *         "rooms": [
+         *           {
+         *             "adults": 2,
+         *             "children_ages": []
+         *           }
+         *         ]
+         *       }
+         *     }
          */
         BookingRequest: {
             /**
@@ -1042,6 +1436,10 @@ export interface components {
             guests: components["schemas"]["BookingGuests"][];
             /** @description How the guest will pay. */
             payment: components["schemas"]["Payment"];
+            /** @description Required with `payment.mode` `card_entry`, refused otherwise. */
+            payment_method?: components["schemas"]["PaymentMethod"] | null;
+            /** @description Required with `payment.mode` `card_entry`, refused otherwise. */
+            mandate?: components["schemas"]["Mandate"] | null;
             /**
              * Special Requests
              * @description Free-text requests from the guest, up to 2,000 characters; stored with the booking but not sent to the engine today.
@@ -1448,6 +1846,20 @@ export interface components {
             partner_share?: string | null;
         };
         /**
+         * ConfirmBookingRequest
+         * @description Body of `POST /v2/bookings/{booking_id}/confirm`.
+         * @example {
+         *       "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1"
+         *     }
+         */
+        ConfirmBookingRequest: {
+            /**
+             * Credential Id
+             * @description The `cred_` id to charge; omit it when it was sent as `payment_method.credential_id` at create. Must be active, unexpired, yours and not bound to another booking.
+             */
+            credential_id?: string | null;
+        };
+        /**
          * Confirmation
          * @description Proof that the hotel's engine accepted the reservation. Present once `status` is
          *     `confirmed`.
@@ -1469,6 +1881,40 @@ export interface components {
              * @description When the booking was confirmed, RFC 3339 UTC.
              */
             at?: string | null;
+        };
+        /**
+         * Consent
+         * @description `card_entry` only: your record that the cardholder approved this exact booking.
+         */
+        Consent: {
+            /**
+             * Obtained At
+             * Format: date-time
+             * @description When the guest approved the summary (hotel, room, rate, dates, party, total and cancellation terms), RFC 3339; at most 15 minutes before the create call.
+             */
+            obtained_at: string;
+            /**
+             * Method
+             * @description `explicit_ui_confirmation` (a button on a screen showing the summary) or `explicit_chat_confirmation` (an agent turn that showed the summary and got a yes in that same turn).
+             * @enum {string}
+             */
+            method: "explicit_ui_confirmation" | "explicit_chat_confirmation";
+            /**
+             * Cardholder Authorized
+             * @description Must be `true`: you attest that the guest is the cardholder, or is authorised to use the card, for this booking.
+             * @constant
+             */
+            cardholder_authorized: true;
+            /**
+             * Display Hash
+             * @description Optional `sha256:` hash of the canonical JSON you showed the guest; stored as evidence.
+             */
+            display_hash?: string | null;
+            /**
+             * User Ref
+             * @description Optional opaque id of the guest in your system; stored as evidence, never echoed.
+             */
+            user_ref?: string | null;
         };
         /**
          * DetailCore
@@ -1858,7 +2304,7 @@ export interface components {
         ErrorBody: {
             /**
              * Code
-             * @description Stable error code; the HTTP status follows from it (`bad_request` 400, `unauthorized` 401, `insufficient_credit` 402, `forbidden` 403, `not_found` 404, `conflict` 409, `rate_limited` 429, `upstream_error` 502, `unavailable` 503).
+             * @description Stable error code; the HTTP status follows from it (`bad_request` 400, `unauthorized` 401, `insufficient_credit` 402, `forbidden` 403, `not_found` 404, `conflict` 409, `rate_limited` 429, `upstream_error` 502, `unavailable` 503). A method the route does not accept is `bad_request` with status 405.
              * @enum {string}
              */
             code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "rate_limited" | "insufficient_credit" | "upstream_error" | "unavailable";
@@ -2612,6 +3058,25 @@ export interface components {
             place_id?: string | null;
         };
         /**
+         * Mandate
+         * @description `card_entry` only: the total the guest accepted. We never press the hotel's pay button above
+         *     it.
+         */
+        Mandate: {
+            /**
+             * Accepted Total
+             * @description The total the guest saw and accepted, a decimal string; must equal the offer's `total` to the cent. A higher engine total fails the booking with `price_changed` before the card is typed; a lower one goes ahead.
+             */
+            accepted_total: string;
+            /**
+             * Currency
+             * @description ISO 4217 currency of `accepted_total`; must be the offer's.
+             */
+            currency: string;
+            /** @description The guest's approval of this booking. */
+            consent: components["schemas"]["Consent"];
+        };
+        /**
          * NearFilter
          * @description A point and radius to search around; replaces any place named in `query`.
          */
@@ -2658,6 +3123,29 @@ export interface components {
              * @description True when another candidate scored as well, so neither could be chosen.
              */
             ambiguous?: boolean | null;
+        };
+        /**
+         * NextAction
+         * @description `card_entry` only, non-null exactly when `status` is `requires_action`: what the guest must do.
+         */
+        NextAction: {
+            /**
+             * Type
+             * @description `three_d_secure_app`: tell the guest to approve the payment in their banking app; call nothing. `three_d_secure_otp`: the bank's challenge asks for a code the guest received; the challenge is watched until `expires_at` (a relay endpoint is not available yet).
+             * @enum {string}
+             */
+            type: "three_d_secure_app" | "three_d_secure_otp";
+            /**
+             * Expires At
+             * @description The bank's deadline, RFC 3339 UTC.
+             */
+            expires_at?: string | null;
+            /**
+             * Cancelable
+             * @description Always false: the card was already submitted.
+             * @default false
+             */
+            cancelable?: boolean;
         };
         /**
          * Notice
@@ -2897,10 +3385,10 @@ export interface components {
         Payment: {
             /**
              * Mode
-             * @description `checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page.
+             * @description `checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (rolling out; answers 403 `not_yet_available` in production) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record.
              * @enum {string}
              */
-            mode: "checkout" | "handoff" | "external";
+            mode: "checkout" | "handoff" | "external" | "card_entry";
             /**
              * Return Url
              * @description `checkout` only: the https page the guest lands on after paying (with `booking_id` appended) or abandoning; a VistaLink page when null.
@@ -2912,6 +3400,110 @@ export interface components {
              * @default en
              */
             locale?: string | null;
+        };
+        /**
+         * PaymentCredential
+         * @description A one-booking card credential. It never carries the card number or CVC.
+         * @example {
+         *       "brand": "visa",
+         *       "created_at": "2026-10-07T09:29:00Z",
+         *       "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1",
+         *       "exp_month": 12,
+         *       "exp_year": 2028,
+         *       "expires_at": "2026-10-07T09:59:00Z",
+         *       "last4": "4242",
+         *       "request_id": "req_8f2c1a9b3d4e5f60",
+         *       "status": "active"
+         *     }
+         */
+        PaymentCredential: {
+            /**
+             * Request Id
+             * @description Opaque id of this request, also sent as the `X-Request-Id` header; quote it when contacting support.
+             */
+            request_id: string;
+            /** @description What this call cost, or null when it was free. */
+            billing?: components["schemas"]["Billing"] | null;
+            /**
+             * Credential Id
+             * @description Credential id, `cred_` plus 24 letters and digits.
+             */
+            credential_id: string;
+            /**
+             * Status
+             * @description `active` (unused), `bound` (attached to `booking_id`), `consumed` (handed to the hotel's checkout) or `deleted` (the vault token was deleted).
+             * @enum {string}
+             */
+            status: "active" | "bound" | "consumed" | "deleted";
+            /**
+             * Booking Id
+             * @description The booking it is bound to; null until then.
+             */
+            booking_id?: string | null;
+            /**
+             * Brand
+             * @description Card brand, for example `visa`; null when unknown.
+             */
+            brand?: string | null;
+            /**
+             * Last4
+             * @description Last four digits of the card.
+             */
+            last4?: string | null;
+            /**
+             * Exp Month
+             * @description Card expiry month, 1 to 12.
+             */
+            exp_month?: number | null;
+            /**
+             * Exp Year
+             * @description Card expiry year, four digits.
+             */
+            exp_year?: number | null;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When the credential stops being usable: 30 minutes after creation, or the token's own expiry if sooner.
+             */
+            expires_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the credential was created, RFC 3339 UTC.
+             */
+            created_at: string;
+        };
+        /**
+         * PaymentCredentialRequest
+         * @description Body of `POST /v2/payment_credentials`.
+         * @example {
+         *       "bt_token_id": "2b8f4c1e-6d3a-4e7b-9c0f-5a1d8e2b7c64"
+         *     }
+         */
+        PaymentCredentialRequest: {
+            /**
+             * Bt Token Id
+             * @description The id of a Basis Theory `card` token you created with VistaLink's public key (type `card`, `expires_at` at most 60 minutes ahead, a fresh token per booking). The card number never reaches VistaLink. Test keys accept only `tok_test_confirmed`, `tok_test_requires_action`, `tok_test_card_declined`, `tok_test_unknown` and `tok_test_price_changed`.
+             */
+            bt_token_id: string;
+        };
+        /**
+         * PaymentMethod
+         * @description `card_entry` only: the card the hotel's engine charges, as a credential from
+         *     `POST /v2/payment_credentials`.
+         */
+        PaymentMethod: {
+            /**
+             * Type
+             * @description Always `card` in this version.
+             * @constant
+             */
+            type: "card";
+            /**
+             * Credential Id
+             * @description A `cred_` id from `POST /v2/payment_credentials`, bound to this booking at create. Omit it to send it with `POST /v2/bookings/{booking_id}/confirm` instead.
+             */
+            credential_id?: string | null;
         };
         /**
          * Policy
@@ -2953,6 +3545,22 @@ export interface components {
             tags?: string[];
         };
         /**
+         * PriceToBeat
+         * @description A price you already hold for the same stay and party, which the hotel is asked to beat.
+         */
+        PriceToBeat: {
+            /**
+             * Total
+             * @description Price for the whole stay and party, a positive decimal string in `currency`.
+             */
+            total: string;
+            /**
+             * Currency
+             * @description ISO 4217 currency of `total`.
+             */
+            currency: string;
+        };
+        /**
          * Provenance
          * @description Where the hotel's content comes from.
          */
@@ -2972,6 +3580,529 @@ export interface components {
              * @description Id of the gallery release the image order comes from; null when the images section was not requested or the hotel is not in a release.
              */
             images_release?: string | null;
+        };
+        /**
+         * Quote
+         * @description A request for a price quote, emailed to the hotel by VistaLink. Returned by create, get,
+         *     cancel and accept, and as `data` in `quote.updated`.
+         * @example {
+         *       "anchor": {
+         *         "currency": "EUR",
+         *         "nightly": "481.00",
+         *         "source": "third_party",
+         *         "total": "962.00"
+         *       },
+         *       "created_at": "2026-10-07T09:30:00Z",
+         *       "deadline_at": "2026-10-09T09:30:00Z",
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "next_step": "Email sent to the hotel; most hotels reply within 6 hours, some take a day.",
+         *       "offers": [],
+         *       "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+         *       "status": "waiting",
+         *       "stay": {
+         *         "check_in": "2026-11-14",
+         *         "check_out": "2026-11-16",
+         *         "rooms": [
+         *           {
+         *             "adults": 2,
+         *             "children_ages": []
+         *           }
+         *         ]
+         *       },
+         *       "updated_at": "2026-10-07T09:30:04Z",
+         *       "wants": {
+         *         "board": "breakfast",
+         *         "refundable": true,
+         *         "room_type": "double"
+         *       }
+         *     }
+         * @example {
+         *       "anchor": {
+         *         "currency": "EUR",
+         *         "nightly": "481.00",
+         *         "source": "third_party",
+         *         "total": "962.00"
+         *       },
+         *       "created_at": "2026-10-07T09:30:00Z",
+         *       "deadline_at": "2026-10-09T09:30:00Z",
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "next_step": "The hotel replied with an offer. Accept it to introduce your guest.",
+         *       "offers": [
+         *         {
+         *           "beats_by": "82.00",
+         *           "board": "breakfast",
+         *           "cancellation_deadline": "2026-11-12T23:59:00Z",
+         *           "confidence": 0.93,
+         *           "currency": "EUR",
+         *           "evidence": "We can offer the Superior Double with breakfast for EUR 880 for both nights, free cancellation until 12 November.",
+         *           "free_cancellation": true,
+         *           "includes_taxes": true,
+         *           "needs_review": false,
+         *           "nightly_avg": "440.00",
+         *           "offer_id": "qof_4a9d2c7e1b8f5a3d6e0c",
+         *           "rate_name": "Breakfast included, free cancellation",
+         *           "room_name": "Superior Double",
+         *           "source": "email",
+         *           "total": "880.00",
+         *           "valid_until": "2026-10-10"
+         *         }
+         *       ],
+         *       "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+         *       "status": "offer_received",
+         *       "stay": {
+         *         "check_in": "2026-11-14",
+         *         "check_out": "2026-11-16",
+         *         "rooms": [
+         *           {
+         *             "adults": 2,
+         *             "children_ages": []
+         *           }
+         *         ]
+         *       },
+         *       "updated_at": "2026-10-07T14:52:10Z",
+         *       "wants": {
+         *         "board": "breakfast",
+         *         "refundable": true,
+         *         "room_type": "double"
+         *       }
+         *     }
+         * @example {
+         *       "accepted_offer_id": "qof_4a9d2c7e1b8f5a3d6e0c",
+         *       "anchor": {
+         *         "currency": "EUR",
+         *         "nightly": "481.00",
+         *         "source": "third_party",
+         *         "total": "962.00"
+         *       },
+         *       "created_at": "2026-10-07T09:30:00Z",
+         *       "deadline_at": "2026-10-09T09:30:00Z",
+         *       "hotel_commission_applies": false,
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "next_step": "Your guest has been introduced to the hotel by email; the hotel replies to them directly to confirm the booking.",
+         *       "offers": [
+         *         {
+         *           "beats_by": "82.00",
+         *           "board": "breakfast",
+         *           "cancellation_deadline": "2026-11-12T23:59:00Z",
+         *           "confidence": 0.93,
+         *           "currency": "EUR",
+         *           "evidence": "We can offer the Superior Double with breakfast for EUR 880 for both nights, free cancellation until 12 November.",
+         *           "free_cancellation": true,
+         *           "includes_taxes": true,
+         *           "needs_review": false,
+         *           "nightly_avg": "440.00",
+         *           "offer_id": "qof_4a9d2c7e1b8f5a3d6e0c",
+         *           "rate_name": "Breakfast included, free cancellation",
+         *           "room_name": "Superior Double",
+         *           "source": "email",
+         *           "total": "880.00",
+         *           "valid_until": "2026-10-10"
+         *         }
+         *       ],
+         *       "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+         *       "status": "accepted",
+         *       "stay": {
+         *         "check_in": "2026-11-14",
+         *         "check_out": "2026-11-16",
+         *         "rooms": [
+         *           {
+         *             "adults": 2,
+         *             "children_ages": []
+         *           }
+         *         ]
+         *       },
+         *       "updated_at": "2026-10-07T15:10:31Z",
+         *       "wants": {
+         *         "board": "breakfast",
+         *         "refundable": true,
+         *         "room_type": "double"
+         *       }
+         *     }
+         */
+        Quote: {
+            /**
+             * Request Id
+             * @description Id of the request that returned this quote; null in webhook payloads.
+             */
+            request_id?: string | null;
+            /**
+             * Quote Id
+             * @description Quote id, `qte_` plus 20 hex characters.
+             */
+            quote_id: string;
+            /**
+             * Status
+             * @description Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`.
+             * @enum {string}
+             */
+            status: "queued" | "contacting" | "waiting" | "offer_received" | "completed" | "no_response" | "declined" | "cancelled" | "failed" | "accepted";
+            /**
+             * Hotel Id
+             * Format: uuid
+             * @description The hotel asked.
+             */
+            hotel_id: string;
+            /** @description The stay asked about. */
+            stay: components["schemas"]["QuoteStay"];
+            /** @description The preferences sent, or null. */
+            wants?: components["schemas"]["QuoteWantsOut"] | null;
+            /** @description The price the hotel was asked to beat, or null when there was none. */
+            anchor?: components["schemas"]["QuoteAnchor"] | null;
+            /**
+             * Deadline At
+             * Format: date-time
+             * @description When the hotel's time to reply ends, RFC 3339 UTC.
+             */
+            deadline_at: string;
+            /**
+             * Next Step
+             * @description One plain sentence on what happens next, suitable to show in your own interface.
+             */
+            next_step: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the quote was requested, RFC 3339 UTC.
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             * @description When the quote last changed, RFC 3339 UTC.
+             */
+            updated_at: string;
+            /**
+             * Offers
+             * @description Priced offers from the hotel's replies, oldest first.
+             */
+            offers?: components["schemas"]["QuoteOffer"][];
+            /**
+             * Accepted Offer Id
+             * @description The offer you accepted; null until `status` is `accepted`.
+             */
+            accepted_offer_id?: string | null;
+            /**
+             * Hotel Commission Applies
+             * @description After acceptance: true when the hotel pays a commission on the booking (half of it is yours), false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known.
+             */
+            hotel_commission_applies?: boolean | null;
+            /**
+             * Failure Reason
+             * @description Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable` or `rejected`; null otherwise.
+             */
+            failure_reason?: ("no_contact_email" | "hotel_suppressed" | "hotel_daily_ceiling" | "invalid_stay" | "invalid_request" | "opted_out" | "unreachable" | "rejected") | null;
+            /**
+             * Billing
+             * @description Always null on responses: the quote fee is charged once, when the hotel's first priced offer arrives, and shows in usage.
+             */
+            billing?: null;
+        };
+        /**
+         * QuoteAcceptRequest
+         * @description Body of `POST /v2/quotes/{quote_id}/offers/{offer_id}/accept`.
+         * @example {
+         *       "guest": {
+         *         "email": "ada@example.com",
+         *         "first_name": "Ada",
+         *         "last_name": "Rossi"
+         *       }
+         *     }
+         */
+        QuoteAcceptRequest: {
+            /** @description The guest to introduce to the hotel. */
+            guest: components["schemas"]["QuoteGuest"];
+        };
+        /**
+         * QuoteAnchor
+         * @description The price the hotel was asked to beat.
+         */
+        QuoteAnchor: {
+            /**
+             * Total
+             * @description Price for the whole stay and party, a decimal string in `currency`.
+             */
+            total: string;
+            /**
+             * Nightly
+             * @description `total` divided by the number of nights.
+             */
+            nightly?: string | null;
+            /**
+             * Currency
+             * @description ISO 4217 currency of `total`.
+             */
+            currency: string;
+            /**
+             * Source
+             * @description `third_party` when it is the best public online price we know, `partner` when you sent it.
+             * @enum {string}
+             */
+            source: "third_party" | "partner";
+        };
+        /**
+         * QuoteGuest
+         * @description The guest introduced to the hotel when you accept an offer.
+         */
+        QuoteGuest: {
+            /**
+             * First Name
+             * @description Guest's first name, up to 80 characters.
+             */
+            first_name: string;
+            /**
+             * Last Name
+             * @description Guest's last name, up to 80 characters.
+             */
+            last_name: string;
+            /**
+             * Email
+             * Format: email
+             * @description Guest's email address; the guest is copied on the introduction email and the hotel replies to it.
+             */
+            email: string;
+        };
+        /**
+         * QuoteOffer
+         * @description One priced offer the hotel sent by email, read from its reply.
+         */
+        QuoteOffer: {
+            /**
+             * Offer Id
+             * @description Offer id, `qof_` plus 20 hex characters; pass it to accept.
+             */
+            offer_id: string;
+            /**
+             * Source
+             * @description Always `email`: the hotel's emailed reply.
+             * @default email
+             * @constant
+             */
+            source?: "email";
+            /**
+             * Room Name
+             * @description Room the hotel offered, as it named it.
+             */
+            room_name?: string | null;
+            /**
+             * Rate Name
+             * @description Short summary of the terms, for example `Breakfast included, free cancellation`.
+             */
+            rate_name?: string | null;
+            /**
+             * Total
+             * @description Price for the whole stay and party, a decimal string in `currency`.
+             */
+            total: string;
+            /**
+             * Currency
+             * @description ISO 4217 currency the hotel quoted in; never converted.
+             */
+            currency: string;
+            /**
+             * Nightly Avg
+             * @description `total` divided by the number of nights.
+             */
+            nightly_avg?: string | null;
+            /**
+             * Includes Taxes
+             * @description True when the hotel said taxes are included, false when not, null when it did not say.
+             */
+            includes_taxes?: boolean | null;
+            /**
+             * Board
+             * @description Meals included, or null when the hotel did not say.
+             */
+            board?: ("none" | "breakfast" | "half" | "full" | "all_inclusive") | null;
+            /**
+             * Free Cancellation
+             * @description True when the offer can be canceled free of charge, false when not, null when unknown.
+             */
+            free_cancellation?: boolean | null;
+            /**
+             * Cancellation Deadline
+             * @description Last moment to cancel free of charge, RFC 3339, when the hotel gave one.
+             */
+            cancellation_deadline?: string | null;
+            /**
+             * Valid Until
+             * @description Last day the hotel holds this price, YYYY-MM-DD, when it said so.
+             */
+            valid_until?: string | null;
+            /**
+             * Offer Link
+             * @description A booking link the hotel included in its reply, or null.
+             */
+            offer_link?: string | null;
+            /**
+             * Beats By
+             * @description How much cheaper than the `anchor` price this offer is, in `currency`; null without a comparable anchor.
+             */
+            beats_by?: string | null;
+            /**
+             * Evidence
+             * @description The sentence of the hotel's reply the price was read from, up to 280 characters.
+             */
+            evidence?: string | null;
+            /**
+             * Confidence
+             * @description How sure the reading of the reply is, 0 to 1.
+             */
+            confidence?: number | null;
+            /**
+             * Needs Review
+             * @description True when the reply was ambiguous and the price is being checked: show it with care, it cannot be accepted yet (409 `offer_needs_review`) and it is not charged for. The hotel's first offer with `needs_review` false is the one the quote fee is charged on.
+             * @default false
+             */
+            needs_review?: boolean;
+        };
+        /**
+         * QuoteRequest
+         * @description Body of `POST /v2/quotes`.
+         * @example {
+         *       "deadline_hours": 48,
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "locale": "en",
+         *       "price_to_beat": "auto",
+         *       "stay": {
+         *         "check_in": "2026-11-14",
+         *         "check_out": "2026-11-16",
+         *         "rooms": [
+         *           {
+         *             "adults": 2,
+         *             "children_ages": []
+         *           }
+         *         ]
+         *       },
+         *       "wants": {
+         *         "board": "breakfast",
+         *         "refundable": true,
+         *         "room_type": "double"
+         *       }
+         *     }
+         * @example {
+         *       "deadline_hours": 48,
+         *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+         *       "locale": "en",
+         *       "price_to_beat": {
+         *         "currency": "EUR",
+         *         "total": "962.00"
+         *       },
+         *       "stay": {
+         *         "check_in": "2026-11-14",
+         *         "check_out": "2026-11-16",
+         *         "rooms": [
+         *           {
+         *             "adults": 2,
+         *             "children_ages": []
+         *           }
+         *         ]
+         *       },
+         *       "wants": {
+         *         "board": "breakfast",
+         *         "refundable": true,
+         *         "room_type": "double"
+         *       }
+         *     }
+         */
+        QuoteRequest: {
+            /**
+             * Hotel Id
+             * Format: uuid
+             * @description The hotel to ask, as returned by resolve or search.
+             */
+            hotel_id: string;
+            /** @description Dates and party to ask about; `check_in` must be today or later. */
+            stay: components["schemas"]["Stay"];
+            /** @description Room, board and cancellation preferences passed on to the hotel; omit to ask for the best rate. */
+            wants?: components["schemas"]["QuoteWants"] | null;
+            /**
+             * Price To Beat
+             * @description `auto` (the default) quotes the best public price we know for the stay as the price to beat, when there is one; `{total, currency}` uses your own price instead.
+             * @default auto
+             */
+            price_to_beat?: "auto" | components["schemas"]["PriceToBeat"];
+            /**
+             * Deadline Hours
+             * @description Hours the hotel has to reply, 1 to 168; default 48. A quote with no priced reply by then closes as `no_response` and costs nothing.
+             * @default 48
+             */
+            deadline_hours?: number;
+            /**
+             * Locale
+             * @description Language of the email to the hotel, as a language tag such as `en` or `it`; the hotel's own language when omitted.
+             */
+            locale?: string | null;
+            /**
+             * Sandbox Outcome
+             * @description Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 on a live key.
+             */
+            sandbox_outcome?: ("offer" | "declined" | "no_response") | null;
+        };
+        /**
+         * QuoteStay
+         * @description The stay a quote asks about.
+         */
+        QuoteStay: {
+            /**
+             * Check In
+             * Format: date
+             * @description Arrival date, YYYY-MM-DD.
+             */
+            check_in: string;
+            /**
+             * Check Out
+             * Format: date
+             * @description Departure date, YYYY-MM-DD.
+             */
+            check_out: string;
+            /**
+             * Rooms
+             * @description One entry per room.
+             */
+            rooms?: components["schemas"]["Occupancy"][];
+        };
+        /**
+         * QuoteWants
+         * @description What the guest would like; every field is optional and is passed on to the hotel as a
+         *     preference, not a filter.
+         */
+        QuoteWants: {
+            /**
+             * Refundable
+             * @description True to ask for a rate with free cancellation, false for the cheapest non-refundable one.
+             */
+            refundable?: boolean | null;
+            /**
+             * Board
+             * @description Meals to ask for: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`.
+             */
+            board?: ("none" | "breakfast" | "half" | "full" | "all_inclusive") | null;
+            /**
+             * Room Type
+             * @description Room type to ask for in plain words, for example `double` or `junior suite`; up to 60 characters, no links, email addresses or angle brackets (it is quoted to the hotel).
+             */
+            room_type?: string | null;
+        };
+        /**
+         * QuoteWantsOut
+         * @description The preferences sent with the quote request.
+         */
+        QuoteWantsOut: {
+            /**
+             * Refundable
+             * @description Free cancellation asked for, or null.
+             */
+            refundable?: boolean | null;
+            /**
+             * Board
+             * @description Meals asked for, or null.
+             */
+            board?: ("none" | "breakfast" | "half" | "full" | "all_inclusive") | null;
+            /**
+             * Room Type
+             * @description Room type asked for, or null.
+             */
+            room_type?: string | null;
         };
         /**
          * RateChannel
@@ -4477,7 +5608,7 @@ export interface components {
              * @description The status the booking moved to.
              * @enum {string}
              */
-            state: "queued" | "processing" | "requires_payment" | "requires_user_action" | "confirmed" | "confirmation_pending" | "failed" | "expired" | "canceled";
+            state: "queued" | "processing" | "requires_payment" | "requires_user_action" | "confirmed" | "confirmation_pending" | "failed" | "expired" | "canceled" | "requires_credential" | "submitted" | "requires_action" | "unknown";
         };
         /**
          * UnmatchedListing
@@ -4723,7 +5854,7 @@ export interface components {
              * Events
              * @description Events delivered to it.
              */
-            events: ("rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated")[];
+            events: ("rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated" | "quote.updated")[];
             /**
              * Created At
              * Format: date-time
@@ -4757,9 +5888,9 @@ export interface components {
             url: string;
             /**
              * Events
-             * @description Events to deliver, each needing its family's scope on the key: `booking.updated` (booking), `rates.completed` and `rates.batch.completed` (rates), `rooms.reconcile.completed` (reconcile).
+             * @description Events to deliver, each needing its family's scope on the key: `booking.updated` (booking), `rates.completed` and `rates.batch.completed` (rates), `rooms.reconcile.completed` (reconcile), `quote.updated` (quotes).
              */
-            events: ("rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated")[];
+            events: ("rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated" | "quote.updated")[];
             /**
              * Secret
              * @description Your own signing secret, 24 to 128 characters; one is generated when omitted.
@@ -4809,7 +5940,7 @@ export interface components {
              * Events
              * @description Events delivered to it.
              */
-            events: ("rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated")[];
+            events: ("rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated" | "quote.updated")[];
             /**
              * Created At
              * Format: date-time
@@ -4832,7 +5963,7 @@ export interface components {
              * @description The event delivered.
              * @enum {string}
              */
-            event: "rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated";
+            event: "rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated" | "quote.updated";
             /**
              * Event Id
              * @description Id of the event, `evt_` plus 16 letters and digits, the same for every webhook that receives it and sent as `id` in the payload.
@@ -5062,10 +6193,10 @@ export interface components {
         WebhookEventPayload: {
             /**
              * Event
-             * @description The event: `rates.completed`, `rates.batch.completed` or `rooms.reconcile.completed` when a job finishes (succeeded or failed), `booking.updated` when a booking's status or payment status changes.
+             * @description The event: `rates.completed`, `rates.batch.completed` or `rooms.reconcile.completed` when a job finishes (succeeded or failed), `booking.updated` when a booking's status or payment status changes, `quote.updated` when a quote's status changes or the hotel sends an offer.
              * @enum {string}
              */
-            event: "rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated";
+            event: "rates.completed" | "rates.batch.completed" | "rooms.reconcile.completed" | "booking.updated" | "quote.updated";
             /**
              * Id
              * @description Event id, `evt_` plus 16 characters; use it to discard repeats, since a retried delivery carries the same id.
@@ -5079,7 +6210,7 @@ export interface components {
             created_at: string;
             /**
              * Data
-             * @description The Job for job events, the Booking for `booking.updated`.
+             * @description The Job for job events, the Booking for `booking.updated`, the Quote for `quote.updated`.
              */
             data: {
                 [key: string]: unknown;
@@ -5097,9 +6228,12 @@ export type AmenityList = components['schemas']['AmenityList'];
 export type BedConfig = components['schemas']['BedConfig'];
 export type Billing = components['schemas']['Billing'];
 export type Booking = components['schemas']['Booking'];
+export type BookingCharges = components['schemas']['BookingCharges'];
 export type BookingFailure = components['schemas']['BookingFailure'];
 export type BookingGuests = components['schemas']['BookingGuests'];
+export type BookingMandate = components['schemas']['BookingMandate'];
 export type BookingPayment = components['schemas']['BookingPayment'];
+export type BookingPaymentMethod = components['schemas']['BookingPaymentMethod'];
 export type BookingRequest = components['schemas']['BookingRequest'];
 export type BudgetFilter = components['schemas']['BudgetFilter'];
 export type CanonicalRoom = components['schemas']['CanonicalRoom'];
@@ -5112,7 +6246,9 @@ export type ClarificationAnswer = components['schemas']['ClarificationAnswer'];
 export type ClarificationOption = components['schemas']['ClarificationOption'];
 export type ClarificationPolicy = components['schemas']['ClarificationPolicy'];
 export type Commission = components['schemas']['Commission'];
+export type ConfirmBookingRequest = components['schemas']['ConfirmBookingRequest'];
 export type Confirmation = components['schemas']['Confirmation'];
+export type Consent = components['schemas']['Consent'];
 export type DetailCore = components['schemas']['DetailCore'];
 export type DetailImage = components['schemas']['DetailImage'];
 export type DetailImages = components['schemas']['DetailImages'];
@@ -5139,17 +6275,32 @@ export type JobList = components['schemas']['JobList'];
 export type JobProgress = components['schemas']['JobProgress'];
 export type JobRef = components['schemas']['JobRef'];
 export type LocationFilter = components['schemas']['LocationFilter'];
+export type Mandate = components['schemas']['Mandate'];
 export type NearFilter = components['schemas']['NearFilter'];
 export type NearestListing = components['schemas']['NearestListing'];
+export type NextAction = components['schemas']['NextAction'];
 export type Notice = components['schemas']['Notice'];
 export type Occupancy = components['schemas']['Occupancy'];
 export type Occupant = components['schemas']['Occupant'];
 export type Offer = components['schemas']['Offer'];
 export type Override = components['schemas']['Override'];
 export type Payment = components['schemas']['Payment'];
+export type PaymentCredential = components['schemas']['PaymentCredential'];
+export type PaymentCredentialRequest = components['schemas']['PaymentCredentialRequest'];
+export type PaymentMethod = components['schemas']['PaymentMethod'];
 export type Policy = components['schemas']['Policy'];
 export type Preferences = components['schemas']['Preferences'];
+export type PriceToBeat = components['schemas']['PriceToBeat'];
 export type Provenance = components['schemas']['Provenance'];
+export type Quote = components['schemas']['Quote'];
+export type QuoteAcceptRequest = components['schemas']['QuoteAcceptRequest'];
+export type QuoteAnchor = components['schemas']['QuoteAnchor'];
+export type QuoteGuest = components['schemas']['QuoteGuest'];
+export type QuoteOffer = components['schemas']['QuoteOffer'];
+export type QuoteRequest = components['schemas']['QuoteRequest'];
+export type QuoteStay = components['schemas']['QuoteStay'];
+export type QuoteWants = components['schemas']['QuoteWants'];
+export type QuoteWantsOut = components['schemas']['QuoteWantsOut'];
 export type RateChannel = components['schemas']['RateChannel'];
 export type RateResult = components['schemas']['RateResult'];
 export type RateRoom = components['schemas']['RateRoom'];
@@ -5891,6 +7042,189 @@ export interface operations {
             };
         };
     };
+    confirmBooking: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Required. Any unique string. Same key and same body returns the original response; same key and a different body is a 409.
+                 * @example 4f1c2b8e-booking-ada-rossi
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /**
+                 * @description The `booking_id` returned by POST /v2/bookings.
+                 * @example bk_P2w9Xc4Rt1Lm8Qz3
+                 */
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmBookingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            /** @description bad_request (validation errors carry details.fields[]) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict (details.reason booking_not_confirmable, mandate_expired, credential_expired, credential_consumed, credential_deleted or credential_booking_mismatch) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createPaymentCredential: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Any unique string. Same key and same body returns the original response; same key and a different body is a 409.
+                 * @example 4f1c2b8e-booking-ada-rossi
+                 */
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentCredential"];
+                };
+            };
+            /** @description bad_request (validation errors carry details.fields[]) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict (details.reason credential_reused) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     getBooking: {
         parameters: {
             query?: never;
@@ -6032,6 +7366,374 @@ export interface operations {
                 };
             };
             /** @description conflict (too late to cancel) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createQuote: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Required. Any unique string. Same key and same body returns the original response; same key and a different body is a 409.
+                 * @example 4f1c2b8e-booking-ada-rossi
+                 */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Your open quote for the same hotel and stay, returned instead of a new one (header `X-Quote-Existing: true`); no new email, no charge. */
+            200: {
+                headers: {
+                    /** @description `true`: this is an existing open quote. */
+                    "X-Quote-Existing"?: "true";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            /** @description bad_request (validation errors carry details.fields[]) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description insufficient_credit */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description The `quote_id` returned by POST /v2/quotes.
+                 * @example qte_7c2e9a4b1d8f3e6a0c5b
+                 */
+                quote_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            /** @description bad_request (validation errors carry details.fields[]) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden (missing scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cancelQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description The `quote_id` returned by POST /v2/quotes.
+                 * @example qte_7c2e9a4b1d8f3e6a0c5b
+                 */
+                quote_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            /** @description bad_request (validation errors carry details.fields[]) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden (missing scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict (the quote is already closed) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    acceptQuoteOffer: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Any unique string. Same key and same body returns the original response; same key and a different body is a 409.
+                 * @example 4f1c2b8e-booking-ada-rossi
+                 */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                /**
+                 * @description The `quote_id` returned by POST /v2/quotes.
+                 * @example qte_7c2e9a4b1d8f3e6a0c5b
+                 */
+                quote_id: string;
+                /**
+                 * @description The `offer_id` of one of the quote's `offers`.
+                 * @example qof_4a9d2c7e1b8f5a3d6e0c
+                 */
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteAcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            /** @description bad_request (validation errors carry details.fields[]) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found (quote or offer) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict (the quote is closed, or another offer was accepted) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7068,6 +8770,38 @@ export interface operations {
                     /** @constant */
                     event?: "booking.updated";
                     data?: components["schemas"]["Booking"];
+                };
+            };
+        };
+        responses: {
+            /** @description Any 2xx acknowledges. Anything else is retried: 1m, 5m, 30m, 2h, 12h, 24h. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    onQuoteUpdated: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description `t=<unix>,v1=<hex>`. v1 is HMAC-SHA256 of `<t>.<raw body>` with your secret.
+                 * @example t=1791364462,v1=5f2c…
+                 */
+                "X-VistaLink-Signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEventPayload"] & {
+                    /** @constant */
+                    event?: "quote.updated";
+                    data?: components["schemas"]["Quote"];
                 };
             };
         };

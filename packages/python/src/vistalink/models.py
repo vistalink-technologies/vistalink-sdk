@@ -105,6 +105,39 @@ class Billing(BaseModel):
     ] = "USD"
 
 
+class BookingCharges(BaseModel):
+    """
+    `card_entry` only: the amount the hotel's checkout showed, read in code, never typed by a model.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    amount: Annotated[
+        str | None,
+        Field(
+            description="The engine's total, a decimal string.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Amount",
+        ),
+    ] = None
+    currency: Annotated[
+        str | None,
+        Field(
+            description="ISO 4217 currency of `amount`.",
+            pattern="^[A-Z]{3}$",
+            title="Currency",
+        ),
+    ] = None
+    mismatch: Annotated[
+        bool | None,
+        Field(
+            description="True when the engine reported a charge above `mandate.max_total` after submit; ops is alerted.",
+            title="Mismatch",
+        ),
+    ] = None
+
+
 class BookingFailure(BaseModel):
     """
     Why a booking ended without a reservation. Present when `status` is `failed`, and on
@@ -125,9 +158,14 @@ class BookingFailure(BaseModel):
             "payment_failed",
             "unsupported_engine",
             "payment_unavailable",
+            "card_declined",
+            "three_d_secure_failed",
+            "card_entry_failed",
+            "card_entry_unavailable",
+            "mandate_expired",
         ],
         Field(
-            description="Stable failure code: `sold_out`, `price_changed` (revalidation), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`).",
+            description="Stable failure code: `sold_out`, `price_changed` (revalidation, or with `card_entry` the hotel's checkout total was above the accepted total; nothing was typed), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`). `card_entry` only: `card_declined` (the hotel's checkout declined the card; create a new booking with a new credential), `three_d_secure_failed`, `card_entry_failed` (stopped before the pay button; nothing was charged), `card_entry_unavailable` (card entry is not available for this engine right now), and `mandate_expired` on `expired` (not confirmed within 30 minutes).",
             title="Reason",
         ),
     ]
@@ -137,6 +175,49 @@ class BookingFailure(BaseModel):
             description="One English sentence explaining the failure.", title="Message"
         ),
     ] = None
+
+
+class BookingMandate(BaseModel):
+    """
+    `card_entry` only: what the guest approved.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    accepted_total: Annotated[
+        str,
+        Field(
+            description="The total the guest accepted, in `currency`.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Accepted Total",
+        ),
+    ]
+    currency: Annotated[
+        str,
+        Field(description="ISO 4217 currency.", pattern="^[A-Z]{3}$", title="Currency"),
+    ]
+    max_total: Annotated[
+        str,
+        Field(
+            description="The most the hotel's checkout may show before the card is typed; equals `accepted_total`.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Max Total",
+        ),
+    ]
+    consent_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the guest approved, as you sent it.", title="Consent At"
+        ),
+    ]
+    expires_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="The mandate's deadline: confirm before it, 30 minutes after create.",
+            title="Expires At",
+        ),
+    ]
 
 
 class BookingPayment(BaseModel):
@@ -207,6 +288,40 @@ class BookingPayment(BaseModel):
         Field(
             description="True when the guest's checkout payment completed and the booking will not be made, so the payment must be reversed by the checkout provider: canceled before the engine step, failed with `price_changed_at_payment`, or the amount paid did not match the booking (`payment_failed`); null otherwise.",
             title="Refund Required",
+        ),
+    ] = None
+
+
+class BookingPaymentMethod(BaseModel):
+    """
+    `card_entry` only: the card's metadata. Never the card number or CVC.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: Annotated[Literal["card"], Field(description="Always `card`.", title="Type")]
+    credential_id: Annotated[
+        str | None,
+        Field(description="The `cred_` id; null until bound.", title="Credential Id"),
+    ] = None
+    brand: Annotated[
+        str | None, Field(description="Card brand, for example `visa`.", title="Brand")
+    ] = None
+    last4: Annotated[
+        str | None, Field(description="Last four digits.", title="Last4")
+    ] = None
+    exp_month: Annotated[
+        int | None, Field(description="Expiry month.", title="Exp Month")
+    ] = None
+    exp_year: Annotated[
+        int | None, Field(description="Expiry year.", title="Exp Year")
+    ] = None
+    credential_status: Annotated[
+        Literal["active", "bound", "consumed", "deleted"] | None,
+        Field(
+            description="The credential's status; see `PaymentCredential.status`.",
+            title="Credential Status",
         ),
     ] = None
 
@@ -512,6 +627,24 @@ class Commission(BaseModel):
     ] = None
 
 
+class ConfirmBookingRequest(BaseModel):
+    """
+    Body of `POST /v2/bookings/{booking_id}/confirm`.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    credential_id: Annotated[
+        str | None,
+        Field(
+            description="The `cred_` id to charge; omit it when it was sent as `payment_method.credential_id` at create. Must be active, unexpired, yours and not bound to another booking.",
+            pattern="^cred_[A-Za-z0-9]{24}$",
+            title="Credential Id",
+        ),
+    ] = None
+
+
 class Confirmation(BaseModel):
     """
     Proof that the hotel's engine accepted the reservation. Present once `status` is
@@ -538,6 +671,53 @@ class Confirmation(BaseModel):
     at: Annotated[
         AwareDatetime | None,
         Field(description="When the booking was confirmed, RFC 3339 UTC.", title="At"),
+    ] = None
+
+
+class Consent(BaseModel):
+    """
+    `card_entry` only: your record that the cardholder approved this exact booking.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    obtained_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the guest approved the summary (hotel, room, rate, dates, party, total and cancellation terms), RFC 3339; at most 15 minutes before the create call.",
+            title="Obtained At",
+        ),
+    ]
+    method: Annotated[
+        Literal["explicit_ui_confirmation", "explicit_chat_confirmation"],
+        Field(
+            description="`explicit_ui_confirmation` (a button on a screen showing the summary) or `explicit_chat_confirmation` (an agent turn that showed the summary and got a yes in that same turn).",
+            title="Method",
+        ),
+    ]
+    cardholder_authorized: Annotated[
+        Literal[True],
+        Field(
+            description="Must be `true`: you attest that the guest is the cardholder, or is authorised to use the card, for this booking.",
+            title="Cardholder Authorized",
+        ),
+    ]
+    display_hash: Annotated[
+        str | None,
+        Field(
+            description="Optional `sha256:` hash of the canonical JSON you showed the guest; stored as evidence.",
+            max_length=128,
+            title="Display Hash",
+        ),
+    ] = None
+    user_ref: Annotated[
+        str | None,
+        Field(
+            description="Optional opaque id of the guest in your system; stored as evidence, never echoed.",
+            max_length=128,
+            title="User Ref",
+        ),
     ] = None
 
 
@@ -914,7 +1094,7 @@ class ErrorBody(BaseModel):
             "unavailable",
         ],
         Field(
-            description="Stable error code; the HTTP status follows from it (`bad_request` 400, `unauthorized` 401, `insufficient_credit` 402, `forbidden` 403, `not_found` 404, `conflict` 409, `rate_limited` 429, `upstream_error` 502, `unavailable` 503).",
+            description="Stable error code; the HTTP status follows from it (`bad_request` 400, `unauthorized` 401, `insufficient_credit` 402, `forbidden` 403, `not_found` 404, `conflict` 409, `rate_limited` 429, `upstream_error` 502, `unavailable` 503). A method the route does not accept is `bad_request` with status 405.",
             title="Code",
         ),
     ]
@@ -1318,6 +1498,36 @@ class LocationFilter(BaseModel):
     ] = None
 
 
+class Mandate(BaseModel):
+    """
+    `card_entry` only: the total the guest accepted. We never press the hotel's pay button above
+    it.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    accepted_total: Annotated[
+        str,
+        Field(
+            description="The total the guest saw and accepted, a decimal string; must equal the offer's `total` to the cent. A higher engine total fails the booking with `price_changed` before the card is typed; a lower one goes ahead.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Accepted Total",
+        ),
+    ]
+    currency: Annotated[
+        str,
+        Field(
+            description="ISO 4217 currency of `accepted_total`; must be the offer's.",
+            pattern="^[A-Z]{3}$",
+            title="Currency",
+        ),
+    ]
+    consent: Annotated[
+        Consent, Field(description="The guest's approval of this booking.")
+    ]
+
+
 class NearFilter(BaseModel):
     """
     A point and radius to search around; replaces any place named in `query`.
@@ -1383,6 +1593,34 @@ class NearestListing(BaseModel):
             title="Ambiguous",
         ),
     ] = None
+
+
+class NextAction(BaseModel):
+    """
+    `card_entry` only, non-null exactly when `status` is `requires_action`: what the guest must do.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: Annotated[
+        Literal["three_d_secure_app", "three_d_secure_otp"],
+        Field(
+            description="`three_d_secure_app`: tell the guest to approve the payment in their banking app; call nothing. `three_d_secure_otp`: the bank's challenge asks for a code the guest received; the challenge is watched until `expires_at` (a relay endpoint is not available yet).",
+            title="Type",
+        ),
+    ]
+    expires_at: Annotated[
+        AwareDatetime | None,
+        Field(description="The bank's deadline, RFC 3339 UTC.", title="Expires At"),
+    ] = None
+    cancelable: Annotated[
+        bool | None,
+        Field(
+            description="Always false: the card was already submitted.",
+            title="Cancelable",
+        ),
+    ] = False
 
 
 class Notice(BaseModel):
@@ -1662,9 +1900,9 @@ class Payment(BaseModel):
         extra="allow",
     )
     mode: Annotated[
-        Literal["checkout", "handoff", "external"],
+        Literal["checkout", "handoff", "external", "card_entry"],
         Field(
-            description="`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page.",
+            description="`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (rolling out; answers 403 `not_yet_available` in production) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record.",
             title="Mode",
         ),
     ]
@@ -1684,6 +1922,122 @@ class Payment(BaseModel):
             title="Locale",
         ),
     ] = "en"
+
+
+class PaymentCredential(BaseModel):
+    """
+    A one-booking card credential. It never carries the card number or CVC.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    request_id: Annotated[
+        str,
+        Field(
+            description="Opaque id of this request, also sent as the `X-Request-Id` header; quote it when contacting support.",
+            title="Request Id",
+        ),
+    ]
+    billing: Annotated[
+        Billing | None,
+        Field(description="What this call cost, or null when it was free."),
+    ] = None
+    credential_id: Annotated[
+        str,
+        Field(
+            description="Credential id, `cred_` plus 24 letters and digits.",
+            title="Credential Id",
+        ),
+    ]
+    status: Annotated[
+        Literal["active", "bound", "consumed", "deleted"],
+        Field(
+            description="`active` (unused), `bound` (attached to `booking_id`), `consumed` (handed to the hotel's checkout) or `deleted` (the vault token was deleted).",
+            title="Status",
+        ),
+    ]
+    booking_id: Annotated[
+        str | None,
+        Field(
+            description="The booking it is bound to; null until then.",
+            title="Booking Id",
+        ),
+    ] = None
+    brand: Annotated[
+        str | None,
+        Field(
+            description="Card brand, for example `visa`; null when unknown.",
+            title="Brand",
+        ),
+    ] = None
+    last4: Annotated[
+        str | None, Field(description="Last four digits of the card.", title="Last4")
+    ] = None
+    exp_month: Annotated[
+        int | None, Field(description="Card expiry month, 1 to 12.", title="Exp Month")
+    ] = None
+    exp_year: Annotated[
+        int | None,
+        Field(description="Card expiry year, four digits.", title="Exp Year"),
+    ] = None
+    expires_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the credential stops being usable: 30 minutes after creation, or the token's own expiry if sooner.",
+            title="Expires At",
+        ),
+    ]
+    created_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the credential was created, RFC 3339 UTC.",
+            title="Created At",
+        ),
+    ]
+
+
+class PaymentCredentialRequest(BaseModel):
+    """
+    Body of `POST /v2/payment_credentials`.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    bt_token_id: Annotated[
+        str,
+        Field(
+            description="The id of a Basis Theory `card` token you created with VistaLink's public key (type `card`, `expires_at` at most 60 minutes ahead, a fresh token per booking). The card number never reaches VistaLink. Test keys accept only `tok_test_confirmed`, `tok_test_requires_action`, `tok_test_card_declined`, `tok_test_unknown` and `tok_test_price_changed`.",
+            max_length=64,
+            min_length=1,
+            pattern="^[A-Za-z0-9_-]+$",
+            title="Bt Token Id",
+        ),
+    ]
+
+
+class PaymentMethod(BaseModel):
+    """
+    `card_entry` only: the card the hotel's engine charges, as a credential from
+    `POST /v2/payment_credentials`.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: Annotated[
+        Literal["card"],
+        Field(description="Always `card` in this version.", title="Type"),
+    ]
+    credential_id: Annotated[
+        str | None,
+        Field(
+            description="A `cred_` id from `POST /v2/payment_credentials`, bound to this booking at create. Omit it to send it with `POST /v2/bookings/{booking_id}/confirm` instead.",
+            pattern="^cred_[A-Za-z0-9]{24}$",
+            title="Credential Id",
+        ),
+    ] = None
 
 
 class Policy(BaseModel):
@@ -1743,6 +2097,32 @@ class Preferences(BaseModel):
     ] = None
 
 
+class PriceToBeat(BaseModel):
+    """
+    A price you already hold for the same stay and party, which the hotel is asked to beat.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    total: Annotated[
+        str,
+        Field(
+            description="Price for the whole stay and party, a positive decimal string in `currency`.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Total",
+        ),
+    ]
+    currency: Annotated[
+        str,
+        Field(
+            description="ISO 4217 currency of `total`.",
+            pattern="^[A-Z]{3}$",
+            title="Currency",
+        ),
+    ]
+
+
 class Provenance(BaseModel):
     """
     Where the hotel's content comes from.
@@ -1771,6 +2151,289 @@ class Provenance(BaseModel):
             description="Id of the gallery release the image order comes from; null when the images section was not requested or the hotel is not in a release.",
             title="Images Release",
         ),
+    ] = None
+
+
+class QuoteAnchor(BaseModel):
+    """
+    The price the hotel was asked to beat.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    total: Annotated[
+        str,
+        Field(
+            description="Price for the whole stay and party, a decimal string in `currency`.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Total",
+        ),
+    ]
+    nightly: Annotated[
+        str | None,
+        Field(
+            description="`total` divided by the number of nights.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Nightly",
+        ),
+    ] = None
+    currency: Annotated[
+        str,
+        Field(
+            description="ISO 4217 currency of `total`.",
+            pattern="^[A-Z]{3}$",
+            title="Currency",
+        ),
+    ]
+    source: Annotated[
+        Literal["third_party", "partner"],
+        Field(
+            description="`third_party` when it is the best public online price we know, `partner` when you sent it.",
+            title="Source",
+        ),
+    ]
+
+
+class QuoteGuest(BaseModel):
+    """
+    The guest introduced to the hotel when you accept an offer.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    first_name: Annotated[
+        str,
+        Field(
+            description="Guest's first name, up to 80 characters.",
+            max_length=80,
+            min_length=1,
+            title="First Name",
+        ),
+    ]
+    last_name: Annotated[
+        str,
+        Field(
+            description="Guest's last name, up to 80 characters.",
+            max_length=80,
+            min_length=1,
+            title="Last Name",
+        ),
+    ]
+    email: Annotated[
+        str,
+        Field(
+            description="Guest's email address; the guest is copied on the introduction email and the hotel replies to it.",
+            max_length=254,
+            min_length=6,
+            title="Email",
+        ),
+    ]
+
+
+class QuoteOffer(BaseModel):
+    """
+    One priced offer the hotel sent by email, read from its reply.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    offer_id: Annotated[
+        str,
+        Field(
+            description="Offer id, `qof_` plus 20 hex characters; pass it to accept.",
+            title="Offer Id",
+        ),
+    ]
+    source: Annotated[
+        Literal["email"],
+        Field(description="Always `email`: the hotel's emailed reply.", title="Source"),
+    ] = "email"
+    room_name: Annotated[
+        str | None,
+        Field(description="Room the hotel offered, as it named it.", title="Room Name"),
+    ] = None
+    rate_name: Annotated[
+        str | None,
+        Field(
+            description="Short summary of the terms, for example `Breakfast included, free cancellation`.",
+            title="Rate Name",
+        ),
+    ] = None
+    total: Annotated[
+        str,
+        Field(
+            description="Price for the whole stay and party, a decimal string in `currency`.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Total",
+        ),
+    ]
+    currency: Annotated[
+        str,
+        Field(
+            description="ISO 4217 currency the hotel quoted in; never converted.",
+            pattern="^[A-Z]{3}$",
+            title="Currency",
+        ),
+    ]
+    nightly_avg: Annotated[
+        str | None,
+        Field(
+            description="`total` divided by the number of nights.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Nightly Avg",
+        ),
+    ] = None
+    includes_taxes: Annotated[
+        bool | None,
+        Field(
+            description="True when the hotel said taxes are included, false when not, null when it did not say.",
+            title="Includes Taxes",
+        ),
+    ] = None
+    board: Annotated[
+        Literal["none", "breakfast", "half", "full", "all_inclusive"] | None,
+        Field(
+            description="Meals included, or null when the hotel did not say.",
+            title="Board",
+        ),
+    ] = None
+    free_cancellation: Annotated[
+        bool | None,
+        Field(
+            description="True when the offer can be canceled free of charge, false when not, null when unknown.",
+            title="Free Cancellation",
+        ),
+    ] = None
+    cancellation_deadline: Annotated[
+        AwareDatetime | None,
+        Field(
+            description="Last moment to cancel free of charge, RFC 3339, when the hotel gave one.",
+            title="Cancellation Deadline",
+        ),
+    ] = None
+    valid_until: Annotated[
+        date_aliased | None,
+        Field(
+            description="Last day the hotel holds this price, YYYY-MM-DD, when it said so.",
+            title="Valid Until",
+        ),
+    ] = None
+    offer_link: Annotated[
+        str | None,
+        Field(
+            description="A booking link the hotel included in its reply, or null.",
+            title="Offer Link",
+        ),
+    ] = None
+    beats_by: Annotated[
+        str | None,
+        Field(
+            description="How much cheaper than the `anchor` price this offer is, in `currency`; null without a comparable anchor.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Beats By",
+        ),
+    ] = None
+    evidence: Annotated[
+        str | None,
+        Field(
+            description="The sentence of the hotel's reply the price was read from, up to 280 characters.",
+            title="Evidence",
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="How sure the reading of the reply is, 0 to 1.",
+            ge=0.0,
+            le=1.0,
+            title="Confidence",
+        ),
+    ] = None
+    needs_review: Annotated[
+        bool | None,
+        Field(
+            description="True when the reply was ambiguous and the price is being checked: show it with care, it cannot be accepted yet (409 `offer_needs_review`) and it is not charged for. The hotel's first offer with `needs_review` false is the one the quote fee is charged on.",
+            title="Needs Review",
+        ),
+    ] = False
+
+
+class QuoteStay(BaseModel):
+    """
+    The stay a quote asks about.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    check_in: Annotated[
+        date_aliased, Field(description="Arrival date, YYYY-MM-DD.", title="Check In")
+    ]
+    check_out: Annotated[
+        date_aliased,
+        Field(description="Departure date, YYYY-MM-DD.", title="Check Out"),
+    ]
+    rooms: Annotated[
+        list[Occupancy] | None, Field(description="One entry per room.", title="Rooms")
+    ] = None
+
+
+class QuoteWants(BaseModel):
+    """
+    What the guest would like; every field is optional and is passed on to the hotel as a
+    preference, not a filter.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    refundable: Annotated[
+        bool | None,
+        Field(
+            description="True to ask for a rate with free cancellation, false for the cheapest non-refundable one.",
+            title="Refundable",
+        ),
+    ] = None
+    board: Annotated[
+        Literal["none", "breakfast", "half", "full", "all_inclusive"] | None,
+        Field(
+            description="Meals to ask for: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`.",
+            title="Board",
+        ),
+    ] = None
+    room_type: Annotated[
+        str | None,
+        Field(
+            description="Room type to ask for in plain words, for example `double` or `junior suite`; up to 60 characters, no links, email addresses or angle brackets (it is quoted to the hotel).",
+            max_length=60,
+            min_length=1,
+            title="Room Type",
+        ),
+    ] = None
+
+
+class QuoteWantsOut(BaseModel):
+    """
+    The preferences sent with the quote request.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    refundable: Annotated[
+        bool | None,
+        Field(description="Free cancellation asked for, or null.", title="Refundable"),
+    ] = None
+    board: Annotated[
+        Literal["none", "breakfast", "half", "full", "all_inclusive"] | None,
+        Field(description="Meals asked for, or null.", title="Board"),
+    ] = None
+    room_type: Annotated[
+        str | None,
+        Field(description="Room type asked for, or null.", title="Room Type"),
     ] = None
 
 
@@ -2580,6 +3243,10 @@ class TimelineEntry(BaseModel):
             "failed",
             "expired",
             "canceled",
+            "requires_credential",
+            "submitted",
+            "requires_action",
+            "unknown",
         ],
         Field(description="The status the booking moved to.", title="State"),
     ]
@@ -2837,6 +3504,7 @@ class Webhook(BaseModel):
                 "rates.batch.completed",
                 "rooms.reconcile.completed",
                 "booking.updated",
+                "quote.updated",
             ]
         ],
         Field(description="Events delivered to it.", title="Events"),
@@ -2880,11 +3548,12 @@ class WebhookCreateRequest(BaseModel):
                 "rates.batch.completed",
                 "rooms.reconcile.completed",
                 "booking.updated",
+                "quote.updated",
             ]
         ],
         Field(
-            description="Events to deliver, each needing its family's scope on the key: `booking.updated` (booking), `rates.completed` and `rates.batch.completed` (rates), `rooms.reconcile.completed` (reconcile).",
-            max_length=4,
+            description="Events to deliver, each needing its family's scope on the key: `booking.updated` (booking), `rates.completed` and `rates.batch.completed` (rates), `rooms.reconcile.completed` (reconcile), `quote.updated` (quotes).",
+            max_length=5,
             min_length=1,
             title="Events",
         ),
@@ -2944,6 +3613,7 @@ class WebhookCreated(BaseModel):
                 "rates.batch.completed",
                 "rooms.reconcile.completed",
                 "booking.updated",
+                "quote.updated",
             ]
         ],
         Field(description="Events delivered to it.", title="Events"),
@@ -2978,6 +3648,7 @@ class WebhookDelivery(BaseModel):
             "rates.batch.completed",
             "rooms.reconcile.completed",
             "booking.updated",
+            "quote.updated",
         ],
         Field(description="The event delivered.", title="Event"),
     ]
@@ -3137,9 +3808,10 @@ class WebhookEventPayload(BaseModel):
             "rates.batch.completed",
             "rooms.reconcile.completed",
             "booking.updated",
+            "quote.updated",
         ],
         Field(
-            description="The event: `rates.completed`, `rates.batch.completed` or `rooms.reconcile.completed` when a job finishes (succeeded or failed), `booking.updated` when a booking's status or payment status changes.",
+            description="The event: `rates.completed`, `rates.batch.completed` or `rooms.reconcile.completed` when a job finishes (succeeded or failed), `booking.updated` when a booking's status or payment status changes, `quote.updated` when a quote's status changes or the hotel sends an offer.",
             title="Event",
         ),
     ]
@@ -3157,7 +3829,7 @@ class WebhookEventPayload(BaseModel):
     data: Annotated[
         dict[str, Any],
         Field(
-            description="The Job for job events, the Booking for `booking.updated`.",
+            description="The Job for job events, the Booking for `booking.updated`, the Quote for `quote.updated`.",
             title="Data",
         ),
     ]
@@ -3222,9 +3894,13 @@ class Booking(BaseModel):
             "failed",
             "expired",
             "canceled",
+            "requires_credential",
+            "submitted",
+            "requires_action",
+            "unknown",
         ],
         Field(
-            description="Where the booking is: `queued`, `processing`, `requires_payment` (show `payment.checkout_url`), `requires_user_action` (send the guest to `handoff.url`), then `confirmed`, `confirmation_pending` (submitted, confirmation not yet seen), `failed`, `expired` or `canceled`.",
+            description="Where the booking is: `queued`, `processing`, `requires_payment` (show `payment.checkout_url`), `requires_user_action` (send the guest to `handoff.url`), then `confirmed`, `confirmation_pending` (submitted, confirmation not yet seen), `failed`, `expired` or `canceled`. Only `card_entry` bookings also use `requires_credential` (waiting for confirm), `submitted` (the hotel's pay button was pressed), `requires_action` (see `next_action`) and `unknown` (submitted, outcome not yet provable: tell the guest not to book again and to check their email from the hotel).",
             title="Status",
         ),
     ]
@@ -3274,12 +3950,51 @@ class Booking(BaseModel):
     timeline: Annotated[
         list[TimelineEntry] | None,
         Field(
-            description="Every status the booking has been in, oldest first, starting with `queued`.",
+            description="Every status the booking has been in, oldest first, starting with `queued` (`requires_credential` for `card_entry`).",
             title="Timeline",
         ),
     ] = None
     billing: Annotated[
         None, Field(description="Always null: bookings are free.", title="Billing")
+    ] = None
+    version: Annotated[
+        int | None,
+        Field(
+            description="`card_entry` only: goes up by one on every change; apply a `booking.updated` event only when its `data.version` is higher than the last one you saw.",
+            title="Version",
+        ),
+    ] = None
+    mandate: Annotated[
+        BookingMandate | None,
+        Field(description="`card_entry` only: what the guest approved."),
+    ] = None
+    payment_method: Annotated[
+        BookingPaymentMethod | None,
+        Field(description="`card_entry` only: the card's brand, last four and expiry."),
+    ] = None
+    next_action: Annotated[
+        NextAction | None,
+        Field(
+            description="`card_entry` only: set exactly when `status` is `requires_action`."
+        ),
+    ] = None
+    charges: Annotated[
+        BookingCharges | None,
+        Field(description="`card_entry` only: the total the hotel's checkout showed."),
+    ] = None
+    submitted_at: Annotated[
+        AwareDatetime | None,
+        Field(
+            description="`card_entry` only: when the hotel's pay button was pressed. Once set, the booking is never resubmitted and cannot be canceled.",
+            title="Submitted At",
+        ),
+    ] = None
+    expires_at: Annotated[
+        AwareDatetime | None,
+        Field(
+            description="`card_entry` only: in `requires_credential`, the deadline to confirm; null otherwise.",
+            title="Expires At",
+        ),
     ] = None
 
 
@@ -3355,6 +4070,18 @@ class BookingRequest(BaseModel):
         ),
     ]
     payment: Annotated[Payment, Field(description="How the guest will pay.")]
+    payment_method: Annotated[
+        PaymentMethod | None,
+        Field(
+            description="Required with `payment.mode` `card_entry`, refused otherwise."
+        ),
+    ] = None
+    mandate: Annotated[
+        Mandate | None,
+        Field(
+            description="Required with `payment.mode` `card_entry`, refused otherwise."
+        ),
+    ] = None
     special_requests: Annotated[
         str | None,
         Field(
@@ -3767,6 +4494,204 @@ class JobList(BaseModel):
         Field(
             description="Pass as `cursor` for the next page; null on the last page.",
             title="Next Cursor",
+        ),
+    ] = None
+
+
+class Quote(BaseModel):
+    """
+    A request for a price quote, emailed to the hotel by VistaLink. Returned by create, get,
+    cancel and accept, and as `data` in `quote.updated`.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            description="Id of the request that returned this quote; null in webhook payloads.",
+            title="Request Id",
+        ),
+    ] = None
+    quote_id: Annotated[
+        str,
+        Field(description="Quote id, `qte_` plus 20 hex characters.", title="Quote Id"),
+    ]
+    status: Annotated[
+        Literal[
+            "queued",
+            "contacting",
+            "waiting",
+            "offer_received",
+            "completed",
+            "no_response",
+            "declined",
+            "cancelled",
+            "failed",
+            "accepted",
+        ],
+        Field(
+            description="Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`.",
+            title="Status",
+        ),
+    ]
+    hotel_id: Annotated[str, Field(description="The hotel asked.", title="Hotel Id")]
+    stay: Annotated[QuoteStay, Field(description="The stay asked about.")]
+    wants: Annotated[
+        QuoteWantsOut | None, Field(description="The preferences sent, or null.")
+    ] = None
+    anchor: Annotated[
+        QuoteAnchor | None,
+        Field(
+            description="The price the hotel was asked to beat, or null when there was none."
+        ),
+    ] = None
+    deadline_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the hotel's time to reply ends, RFC 3339 UTC.",
+            title="Deadline At",
+        ),
+    ]
+    next_step: Annotated[
+        str,
+        Field(
+            description="One plain sentence on what happens next, suitable to show in your own interface.",
+            title="Next Step",
+        ),
+    ]
+    created_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the quote was requested, RFC 3339 UTC.",
+            title="Created At",
+        ),
+    ]
+    updated_at: Annotated[
+        AwareDatetime,
+        Field(
+            description="When the quote last changed, RFC 3339 UTC.", title="Updated At"
+        ),
+    ]
+    offers: Annotated[
+        list[QuoteOffer] | None,
+        Field(
+            description="Priced offers from the hotel's replies, oldest first.",
+            title="Offers",
+        ),
+    ] = None
+    accepted_offer_id: Annotated[
+        str | None,
+        Field(
+            description="The offer you accepted; null until `status` is `accepted`.",
+            title="Accepted Offer Id",
+        ),
+    ] = None
+    hotel_commission_applies: Annotated[
+        bool | None,
+        Field(
+            description="After acceptance: true when the hotel pays a commission on the booking (half of it is yours), false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known.",
+            title="Hotel Commission Applies",
+        ),
+    ] = None
+    failure_reason: Annotated[
+        Literal[
+            "no_contact_email",
+            "hotel_suppressed",
+            "hotel_daily_ceiling",
+            "invalid_stay",
+            "invalid_request",
+            "opted_out",
+            "unreachable",
+            "rejected",
+        ]
+        | None,
+        Field(
+            description="Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable` or `rejected`; null otherwise.",
+            title="Failure Reason",
+        ),
+    ] = None
+    billing: Annotated[
+        None,
+        Field(
+            description="Always null on responses: the quote fee is charged once, when the hotel's first priced offer arrives, and shows in usage.",
+            title="Billing",
+        ),
+    ] = None
+
+
+class QuoteAcceptRequest(BaseModel):
+    """
+    Body of `POST /v2/quotes/{quote_id}/offers/{offer_id}/accept`.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    guest: Annotated[
+        QuoteGuest, Field(description="The guest to introduce to the hotel.")
+    ]
+
+
+class QuoteRequest(BaseModel):
+    """
+    Body of `POST /v2/quotes`.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    hotel_id: Annotated[
+        str,
+        Field(
+            description="The hotel to ask, as returned by resolve or search.",
+            pattern="^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            title="Hotel Id",
+        ),
+    ]
+    stay: Annotated[
+        Stay,
+        Field(
+            description="Dates and party to ask about; `check_in` must be today or later."
+        ),
+    ]
+    wants: Annotated[
+        QuoteWants | None,
+        Field(
+            description="Room, board and cancellation preferences passed on to the hotel; omit to ask for the best rate."
+        ),
+    ] = None
+    price_to_beat: Annotated[
+        Literal["auto"] | PriceToBeat | None,
+        Field(
+            description="`auto` (the default) quotes the best public price we know for the stay as the price to beat, when there is one; `{total, currency}` uses your own price instead.",
+            title="Price To Beat",
+            validate_default=True,
+        ),
+    ] = "auto"
+    deadline_hours: Annotated[
+        int | None,
+        Field(
+            description="Hours the hotel has to reply, 1 to 168; default 48. A quote with no priced reply by then closes as `no_response` and costs nothing.",
+            ge=1,
+            le=168,
+            title="Deadline Hours",
+        ),
+    ] = 48
+    locale: Annotated[
+        str | None,
+        Field(
+            description="Language of the email to the hotel, as a language tag such as `en` or `it`; the hotel's own language when omitted.",
+            pattern="^[a-z]{2}(-[A-Za-z]{2})?$",
+            title="Locale",
+        ),
+    ] = None
+    sandbox_outcome: Annotated[
+        Literal["offer", "declined", "no_response"] | None,
+        Field(
+            description="Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 on a live key.",
+            title="Sandbox Outcome",
         ),
     ] = None
 

@@ -10,7 +10,7 @@ https://api.vistalink.com/v2/openapi.json. `@vistalink/api`, `@vistalink/cli`
 and `vistalink` on PyPI are 0.0.1 name reservations. The unscoped `vistalink`
 npm package is not published: npm blocks the name as too similar to an
 existing package, and an exception has been requested. Until then the
-publish workflow skips it. The first working release is 2.0.0,
+publish workflow skips it. The first working release is 2.1.0 (Quotes),
 published from this repository. Docs: https://vistalink.com/developers/docs.
 
 ## Layout
@@ -43,9 +43,9 @@ scripts/
 | npm, unscoped | `vistalink` (binary `vistalink`, runs `@vistalink/cli`). Not published: npm blocks the name pending an exception | `packages/vistalink-unscoped/package.json` |
 | PyPI | `vistalink` (import `vistalink`) | `packages/python/pyproject.toml` |
 
-On 2026-10-07 all four were unclaimed (`npm view` and PyPI's JSON API both
-404). The `@vistalink` npm org has to be created by the company account before
-the first scoped publish.
+On 2026-10-14, `@vistalink/api`, `@vistalink/cli` (npm org `@vistalink`) and
+PyPI `vistalink` were reserved at 0.0.1; the unscoped npm `vistalink` still
+404s (support request open).
 
 ## What every SDK does
 
@@ -58,7 +58,7 @@ the first scoped publish.
   exponential backoff.
 - Errors come back as `VistaLinkError{code, message, requestId, status,
   details}`. `code` is the API's `error.code`.
-- `jobs.wait` / `bookings.wait` polling, `jobs.download` for `rates.batch`
+- `jobs.wait` / `bookings.wait` / `quotes.wait` polling, `jobs.download` for `rates.batch`
   NDJSON (signed `result_url`, or `GET /v2/jobs/{id}/result` when it is null),
   a booking next-step helper for the three payment modes (`checkout`,
   `handoff`, `external`), `cursor` / `next_cursor` pagination helpers, and

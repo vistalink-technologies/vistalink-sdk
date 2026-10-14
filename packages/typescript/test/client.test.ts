@@ -339,3 +339,57 @@ describe("pagination", () => {
     expect(calls[1].body).toEqual({ query: "rome", search_id: "srch_1", cursor: "p2" });
   });
 });
+
+describe("quotes", () => {
+  const q = (status: string, extra = {}) => ({ quote_id: "qte_1", status, hotel_id: "h", offers: [], ...extra });
+
+  it("create sends a generated Idempotency-Key and reuses it on retry", async () => {
+    const { vl, calls } = make([
+      { status: 503, body: { error: { code: "unavailable", message: "x" } } },
+      { status: 202, body: q("contacting") },
+    ]);
+    const r = await vl.quotes.create({
+      hotel_id: "h",
+      stay: { check_in: "2026-11-27", check_out: "2026-11-30", rooms: [{ adults: 2, children_ages: [] }] },
+    });
+    expect(r.quote_id).toBe("qte_1");
+    expect(calls[0].url).toBe("https://api.test/v2/quotes");
+    const k1 = calls[0].headers.get("idempotency-key");
+    expect(k1).toMatch(/^[0-9a-f-]{32,36}$/);
+    expect(calls[1].headers.get("idempotency-key")).toBe(k1);
+  });
+
+  it("accept posts the guest to the offer with an Idempotency-Key", async () => {
+    const { vl, calls } = make([{ status: 200, body: q("accepted", { accepted_offer_id: "qof_1" }) }]);
+    const r = await vl.quotes.accept("qte_1", "qof_1", { guest: { first_name: "Ada", last_name: "Rossi", email: "ada@example.com" } }, { idempotencyKey: "acc-1" });
+    expect(r.status).toBe("accepted");
+    expect(calls[0].url).toBe("https://api.test/v2/quotes/qte_1/offers/qof_1/accept");
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].headers.get("idempotency-key")).toBe("acc-1");
+    expect(calls[0].body).toEqual({ guest: { first_name: "Ada", last_name: "Rossi", email: "ada@example.com" } });
+  });
+
+  it("get and cancel hit their routes", async () => {
+    const { vl, calls } = make([
+      { status: 200, body: q("waiting") },
+      { status: 200, body: q("cancelled") },
+    ]);
+    await vl.quotes.get("qte_1");
+    await expect(vl.quotes.cancel("qte_1")).resolves.toMatchObject({ status: "cancelled" });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "GET https://api.test/v2/quotes/qte_1",
+      "POST https://api.test/v2/quotes/qte_1/cancel",
+    ]);
+  });
+
+  it("wait stops at the first offer, or when the quote closes without one", async () => {
+    const { vl } = make([
+      { status: 200, body: q("contacting") },
+      { status: 200, body: q("waiting") },
+      { status: 200, body: q("offer_received", { offers: [{ offer_id: "qof_1", total: "240.00", currency: "EUR" }] }) },
+    ]);
+    await expect(vl.quotes.wait("qte_1", { intervalMs: 1 })).resolves.toMatchObject({ status: "offer_received" });
+    const { vl: vl2 } = make([{ status: 200, body: q("waiting") }, { status: 200, body: q("no_response") }]);
+    await expect(vl2.quotes.wait("qte_1", { intervalMs: 1 })).resolves.toMatchObject({ status: "no_response" });
+  });
+});

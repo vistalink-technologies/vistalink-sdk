@@ -52,6 +52,11 @@ export function parseValue(raw: string, kind: FieldKind, flag: string, readFile:
       if (kind === "list_or_json" && text.startsWith("{")) return [parseJson(text, flag)];
       return text.split(",").map((s) => s.trim()).filter(Boolean);
     }
+    case "string_or_json": {
+      // A bare word stays a string (`--price-to-beat auto`); an object or array is JSON.
+      const text = readArg(raw, readFile).trim();
+      return text.startsWith("{") || text.startsWith("[") ? parseJson(text, flag) : text;
+    }
     case "json":
       return parseJson(readArg(raw, readFile).trim(), flag);
   }

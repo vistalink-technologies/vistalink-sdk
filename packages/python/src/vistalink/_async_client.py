@@ -44,6 +44,7 @@ class AsyncVistaLink:
         self.rates = Rates(self)
         self.rooms = Rooms(self)
         self.bookings = Bookings(self)
+        self.quotes = Quotes(self)
         self.jobs = Jobs(self)
         self.webhooks = Webhooks(self)
         self.chat = Chat(self)
@@ -181,6 +182,36 @@ class Bookings(_Resource):
         stop = set(until)
         return await self._c._poll(lambda: self.get(booking_id), lambda x: x.status in stop, timeout=timeout,
                              interval=interval, max_interval=max_interval, on_poll=on_poll, what=f"booking {booking_id}")
+
+
+class Quotes(_Resource):
+    async def create(self, body: b.Body, *, idempotency_key: str | None = None) -> m.Quote:
+        """``POST /v2/quotes``: VistaLink emails the hotel for a direct price, on behalf of a guest it
+        does not name. An Idempotency-Key is generated when not given. Returns the open quote for the
+        same hotel and stay instead of sending a second email. $0.25 per quote the hotel answers with
+        a price; test keys get a simulated hotel (``sandbox_outcome``)."""
+        return await self._c._send(b.quote_create(body, idempotency_key))
+
+    async def get(self, quote_id: str) -> m.Quote:
+        return await self._c._send(b.quote_get(quote_id))
+
+    async def cancel(self, quote_id: str) -> m.Quote:
+        """Stops further emails to the hotel. Free; cancelled after a priced offer keeps the charge."""
+        return await self._c._send(b.quote_cancel(quote_id))
+
+    async def accept(self, quote_id: str, offer_id: str, body: b.Body, *, idempotency_key: str | None = None) -> m.Quote:
+        """Send the hotel ONE introduction email with the guest copied; it can't be taken back. Free.
+        An Idempotency-Key is generated when not given, so a retry never introduces the guest twice."""
+        return await self._c._send(b.quote_accept(quote_id, offer_id, body, idempotency_key))
+
+    async def wait(self, quote_id: str, *, until: Iterable[str] = b.QUOTE_STOP_DEFAULT, timeout: float = 600,
+             interval: float = 2.0, max_interval: float = 60.0,
+             on_poll: Callable[[m.Quote], None] | None = None) -> m.Quote:
+        """Poll until the quote has an offer or closes. Hotels usually reply within hours: raise
+        ``timeout`` (or subscribe to ``quote.updated``) for live keys."""
+        stop = set(until)
+        return await self._c._poll(lambda: self.get(quote_id), lambda x: x.status in stop, timeout=timeout,
+                             interval=interval, max_interval=max_interval, on_poll=on_poll, what=f"quote {quote_id}")
 
 
 class Jobs(_Resource):

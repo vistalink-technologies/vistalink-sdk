@@ -44,6 +44,7 @@ rates).
 | `rates` | `get`, `batch` | `rates <ids\|urls…> --check-in --check-out [--live] [--channel direct\|third_party]`; `rates batch --file hotels.txt --check-in --check-out [--out r.ndjson]` waits and downloads the NDJSON (signed `result_url`, else `GET /v2/jobs/{id}/result`) |
 | `rooms` | `reconcile` | `--hotel <id> --source booking_url=… --source website_url=… [--supplied rooms.json]`, waits for the job |
 | `bookings` | `create`, `get <id>`, `cancel <id>` | `create --payment-mode checkout\|handoff\|external [--return-url]`; `create --wait` polls until the guest has to act (prints the checkout, handoff or external link as `next`) or the booking is final (`confirmed`, `failed`, `expired`, `canceled`) |
+| `quotes` | `create`, `get <id>`, `cancel <id>`, `accept <id> <offer_id>` | `create --hotel-id … --stay @stay.json [--price-to-beat auto\|'{"total":"250.00","currency":"EUR"}'] [--sandbox-outcome offer]`; `accept … --guest @guest.json` sends one intro email to the hotel |
 | `jobs` | `list`, `get <id>`, `result <id>`, `cancel <id>` | `wait <id> [--timeout --interval]`. For a `rates.batch` job it downloads the NDJSON (`--out`, `--no-download`). `result <id> [--out]` writes the NDJSON as-is |
 | `webhooks` | `list`, `create`, `delete <id>`, `deliveries <id>` | `tail <id> [--interval 5] [--once]` |
 | `chat` | `send` | |

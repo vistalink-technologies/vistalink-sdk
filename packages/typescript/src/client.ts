@@ -5,7 +5,7 @@ import { DEFAULT_RETRY, type RetryOptions, retryingFetch, sleep as defaultSleep,
 import { paginate, paginateItems } from "./pagination.js";
 import { verifyWebhook, type HeadersLike, type VerifyOptions, type WebhookEvent } from "./webhooks.js";
 
-export const SDK_VERSION = "0.0.1";
+export const SDK_VERSION = "2.1.0";
 export const DEFAULT_BASE_URL = "https://api.vistalink.com";
 
 type S = components["schemas"];
@@ -14,6 +14,8 @@ export type JobStatus = Job["status"];
 export type Booking = S["Booking"];
 export type BookingStatus = Booking["status"];
 export type PaymentMode = S["Payment"]["mode"];
+export type Quote = S["Quote"];
+export type QuoteStatus = Quote["status"];
 export type HotelDetailQuery = NonNullable<paths["/v2/hotels/{hotel_id}"]["get"]["parameters"]["query"]>;
 export type JobListQuery = NonNullable<paths["/v2/jobs"]["get"]["parameters"]["query"]>;
 export type DeliveryListQuery = NonNullable<paths["/v2/webhooks/{webhook_id}/deliveries"]["get"]["parameters"]["query"]>;
@@ -60,6 +62,24 @@ export interface WaitOptions {
   /** Throw `VistaLinkError{code: "job_failed" | "job_canceled"}` for those outcomes. Default true. */
   throwOnFailure?: boolean;
 }
+
+export interface QuoteWaitOptions extends Omit<WaitOptions, "onPoll" | "throwOnFailure"> {
+  /** Stop when the quote reaches one of these. Default: an offer to act on, or a closed quote. */
+  until?: QuoteStatus[];
+  onPoll?: (value: Quote) => void;
+}
+
+/** Quote states that never change again (`accepted` can still gain the hotel's late confirmation). */
+export const QUOTE_FINAL: ReadonlySet<QuoteStatus> = new Set<QuoteStatus>([
+  "accepted",
+  "completed",
+  "no_response",
+  "declined",
+  "cancelled",
+  "failed",
+]);
+/** Where `quotes.wait` stops by default: the first offer, or the quote closing without one. */
+export const QUOTE_STOP_DEFAULT: readonly QuoteStatus[] = ["offer_received", ...QUOTE_FINAL];
 
 export interface BookingWaitOptions extends Omit<WaitOptions, "onPoll" | "throwOnFailure"> {
   /** Stop when the booking reaches one of these. Default: every state that needs the caller or is final. */
@@ -150,6 +170,7 @@ export class VistaLink {
   readonly rates: RatesResource;
   readonly rooms: RoomsResource;
   readonly bookings: BookingsResource;
+  readonly quotes: QuotesResource;
   readonly jobs: JobsResource;
   readonly webhooks: WebhooksResource;
   readonly chat: ChatResource;
@@ -179,6 +200,7 @@ export class VistaLink {
     this.rates = new RatesResource(this);
     this.rooms = new RoomsResource(this);
     this.bookings = new BookingsResource(this);
+    this.quotes = new QuotesResource(this);
     this.jobs = new JobsResource(this);
     this.webhooks = new WebhooksResource(this);
     this.chat = new ChatResource(this);
@@ -359,6 +381,53 @@ export class BookingsResource extends Resource {
   wait(bookingId: string, opts: BookingWaitOptions = {}): Promise<Booking> {
     const until = new Set<BookingStatus>(opts.until ?? BOOKING_STOP_DEFAULT);
     return this.vl._poll(() => this.get(bookingId, { signal: opts.signal }), (b) => until.has(b.status), opts, `booking ${bookingId}`);
+  }
+}
+
+export class QuotesResource extends Resource {
+  /**
+   * `POST /v2/quotes` — VistaLink emails the hotel for a direct price on the stay, on behalf of a
+   * guest it does not name. `Idempotency-Key` is required by the API and generated here when omitted.
+   * Answers with the Quote (202), or the open quote for the same hotel and stay (200, no new email).
+   * $0.25 per quote the hotel answers with a price; test keys get a simulated hotel (`sandbox_outcome`).
+   */
+  create(body: S["QuoteRequest"], opts?: IdempotentRequestOptions): Promise<Quote> {
+    return this.vl._unwrap(
+      this.vl.raw.POST("/v2/quotes", { body, params: this.vl._idemParams(opts), signal: opts?.signal, headers: opts?.headers }),
+    );
+  }
+
+  get(quoteId: string, opts?: RequestOptions): Promise<Quote> {
+    return this.vl._unwrap(this.vl.raw.GET("/v2/quotes/{quote_id}", { params: { path: { quote_id: quoteId } }, ...opts }));
+  }
+
+  /** Stops further emails to the hotel. Free; a quote cancelled after a priced offer keeps its charge. */
+  cancel(quoteId: string, opts?: RequestOptions): Promise<Quote> {
+    return this.vl._unwrap(
+      this.vl.raw.POST("/v2/quotes/{quote_id}/cancel", { params: { path: { quote_id: quoteId } }, ...opts }),
+    );
+  }
+
+  /**
+   * Accept one offer: the hotel gets ONE introduction email with the guest copied, and confirms the
+   * booking with them directly. It can't be taken back. Free. Sends an `Idempotency-Key` (generated
+   * when omitted), so a retry never introduces the guest twice.
+   */
+  accept(quoteId: string, offerId: string, body: S["QuoteAcceptRequest"], opts?: IdempotentRequestOptions): Promise<Quote> {
+    return this.vl._unwrap(
+      this.vl.raw.POST("/v2/quotes/{quote_id}/offers/{offer_id}/accept", {
+        body,
+        params: { path: { quote_id: quoteId, offer_id: offerId }, ...this.vl._idemParams(opts) },
+        signal: opts?.signal,
+        headers: opts?.headers,
+      }),
+    );
+  }
+
+  /** Poll until the quote has an offer or closes (`QUOTE_STOP_DEFAULT`). Hotels usually reply within hours. */
+  wait(quoteId: string, opts: QuoteWaitOptions = {}): Promise<Quote> {
+    const until = new Set<QuoteStatus>(opts.until ?? QUOTE_STOP_DEFAULT);
+    return this.vl._poll(() => this.get(quoteId, { signal: opts.signal }), (q) => until.has(q.status), opts, `quote ${quoteId}`);
   }
 }
 

@@ -4,6 +4,8 @@ from ._async_client import AsyncVistaLink
 from ._base import (
     BOOKING_FINAL,
     BOOKING_STOP_DEFAULT,
+    QUOTE_FINAL,
+    QUOTE_STOP_DEFAULT,
     DEFAULT_BASE_URL,
     JOB_TERMINAL,
     PAYMENT_MODES,
@@ -31,6 +33,8 @@ __all__ = [
     "JOB_TERMINAL",
     "BOOKING_STOP_DEFAULT",
     "BOOKING_FINAL",
+    "QUOTE_FINAL",
+    "QUOTE_STOP_DEFAULT",
     "PAYMENT_MODES",
     "BookingNextStep",
     "booking_next_step",
