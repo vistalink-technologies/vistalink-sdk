@@ -27,8 +27,14 @@ async function readSecret(prompt: string): Promise<string> {
           done();
           return reject(new Error("Interrupted"));
         }
-        if (ch === "\u007f" || ch === "\b") value = value.slice(0, -1);
-        else value += ch;
+        if (ch === "\u007f" || ch === "\b") {
+          if (value) process.stderr.write("\b \b");
+          value = value.slice(0, -1);
+        } else {
+          value += ch;
+          // One dot per printable character, so a paste visibly landed; the key itself is never echoed.
+          if (ch >= " ") process.stderr.write("•");
+        }
       }
     };
     const done = () => {

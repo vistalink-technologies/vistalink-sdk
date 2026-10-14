@@ -134,6 +134,27 @@ describe("login, keys, openapi", () => {
     expect(h2.store.profiles()).toEqual({});
   });
 
+  it("login accepts a key as terminals paste it", async () => {
+    for (const secret of ["\u001b[200~vl_test_abcdefghijklmnop\u001b[201~\r", '  "vl_test_abcdefghijklmnop"  ', "Bearer vl_test_abcdefghijklmnop"]) {
+      const h = harness([{ status: 200, body: { request_id: "r", jobs: [] } }], { withKey: false, secret });
+      expect(await h.run(["login"])).toBe(0);
+      expect(h.store.load("default")?.key).toBe("vl_test_abcdefghijklmnop");
+    }
+  });
+
+  it("login says WHY a value is not a key, without echoing it", async () => {
+    const empty = harness([], { withKey: false, secret: "\n" });
+    expect(await empty.run(["login"])).toBe(2);
+    expect(empty.err).toContain("Nothing was received");
+    const prefix = harness([], { withKey: false, secret: "vl_test_ab12…" });
+    expect(await prefix.run(["login"])).toBe(2);
+    expect(prefix.err).toContain("PREFIX");
+    const other = harness([], { withKey: false, secret: "sk_live_supersecretvalue" });
+    expect(await other.run(["login"])).toBe(2);
+    expect(other.err).toContain('starting "sk_"');
+    expect(other.err).not.toContain("supersecret");
+  });
+
   it("keys create/revoke point at the dashboard (exit 11)", async () => {
     const h = harness();
     expect(await h.run(["keys", "create"])).toBe(11);
