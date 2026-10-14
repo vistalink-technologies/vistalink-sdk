@@ -10,7 +10,7 @@ https://api.vistalink.com/v2/openapi.json. `@vistalink/api`, `@vistalink/cli`
 and `vistalink` on PyPI are 0.0.1 name reservations. The unscoped `vistalink`
 npm package is not published: npm blocks the name as too similar to an
 existing package, and an exception has been requested. Until then the
-publish workflow skips it. The first working release is 2.0.0,
+publish workflow skips it. The first working release is 2.1.0 (Quotes),
 published from this repository. Docs: https://vistalink.com/developers/docs.
 
 ## Layout

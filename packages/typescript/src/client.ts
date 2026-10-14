@@ -5,7 +5,7 @@ import { DEFAULT_RETRY, type RetryOptions, retryingFetch, sleep as defaultSleep,
 import { paginate, paginateItems } from "./pagination.js";
 import { verifyWebhook, type HeadersLike, type VerifyOptions, type WebhookEvent } from "./webhooks.js";
 
-export const SDK_VERSION = "0.0.1";
+export const SDK_VERSION = "2.1.0";
 export const DEFAULT_BASE_URL = "https://api.vistalink.com";
 
 type S = components["schemas"];
