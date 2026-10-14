@@ -147,6 +147,23 @@ session at `handoff.url`) or `external` (stops at `requires_user_action`, the
 engine's own prefilled page at `handoff.url`). `bookings.cancel(id)` moves a
 booking to `canceled`. `webhooks.delete(id)` returns `None` (204).
 
+## 6. Quotes (ask the hotel for a direct price)
+
+```python
+quote = vl.quotes.create({
+    "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+    "stay": {"check_in": "2026-11-27", "check_out": "2026-11-30", "rooms": [{"adults": 2, "children_ages": []}]},
+    "wants": {"refundable": True, "room_type": "double"},
+})                                                     # VistaLink emails the hotel; Idempotency-Key generated
+ready = vl.quotes.wait(quote.quote_id, timeout=6 * 3600)  # first offer, or the quote closing
+if ready.status == "offer_received":
+    vl.quotes.accept(quote.quote_id, ready.offers[0].offer_id,
+                     {"guest": {"first_name": "Ada", "last_name": "Rossi", "email": "ada@example.com"}})
+```
+
+$0.25 per quote the hotel answers with a price; accept and cancel are free.
+Test keys get a simulated hotel within seconds (`sandbox_outcome`).
+
 ## Async
 
 ```python

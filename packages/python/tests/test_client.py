@@ -263,3 +263,31 @@ def test_booking_create_sends_payment_mode_and_key(vl):
 def test_catalog_openapi_is_public(vl):
     vl.router.get("/v2/openapi.json").respond(200, json={"openapi": "3.1.0"})
     assert vl.catalog.openapi() == {"openapi": "3.1.0"}
+
+
+def test_quote_create_sends_key_and_accept_posts_the_guest(vl):
+    from conftest import quote
+    create = vl.router.post("/v2/quotes").respond(202, json=quote("contacting"))
+    q = vl.quotes.create({"hotel_id": "h1", "stay": {"check_in": "2026-11-27", "check_out": "2026-11-30",
+                                                      "rooms": [{"adults": 2, "children_ages": []}]}})
+    assert q.quote_id == "qte_1" and create.calls[0].request.headers["idempotency-key"]
+    acc = vl.router.post("/v2/quotes/qte_1/offers/qof_1/accept").respond(
+        200, json=quote("accepted", accepted_offer_id="qof_1"))
+    q = vl.quotes.accept("qte_1", "qof_1", {"guest": {"first_name": "Ada", "last_name": "Rossi", "email": "ada@example.com"}},
+                         idempotency_key="acc-1")
+    req = acc.calls[0].request
+    assert q.status == "accepted" and req.headers["idempotency-key"] == "acc-1"
+    assert json.loads(req.content) == {"guest": {"first_name": "Ada", "last_name": "Rossi", "email": "ada@example.com"}}
+
+
+def test_quotes_get_cancel_and_wait(vl):
+    from conftest import quote
+    route = vl.router.get("/v2/quotes/qte_1")
+    route.side_effect = [httpx.Response(200, json=quote("waiting")),
+                         httpx.Response(200, json=quote("offer_received", offers=[{
+                             "offer_id": "qof_1", "source": "email", "total": "240.00", "currency": "EUR",
+                             "evidence": "240 EUR total", "confidence": 0.98, "needs_review": False}]))]
+    q = vl.quotes.wait("qte_1", interval=0)
+    assert q.status == "offer_received" and q.offers[0].total == "240.00"
+    vl.router.post("/v2/quotes/qte_1/cancel").respond(200, json=quote("cancelled"))
+    assert vl.quotes.cancel("qte_1").status == "cancelled"

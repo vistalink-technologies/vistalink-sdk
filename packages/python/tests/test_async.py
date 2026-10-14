@@ -46,3 +46,10 @@ async def test_async_download_and_delete(avl):
     assert j.kind == "rates.batch" and text == '{"hotel_id":"h1"}\n'
     avl.router.delete("/v2/webhooks/wh_1").respond(204)
     assert await avl.webhooks.delete("wh_1") is None
+
+
+async def test_async_quotes_wait_stops_when_closed(avl):
+    from conftest import quote
+    route = avl.router.get("/v2/quotes/qte_1")
+    route.side_effect = [httpx.Response(200, json=quote("waiting")), httpx.Response(200, json=quote("no_response"))]
+    assert (await avl.quotes.wait("qte_1", interval=0)).status == "no_response"

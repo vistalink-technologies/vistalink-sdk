@@ -3,8 +3,8 @@
   "info": {
     "title": "VistaLink API",
     "description": "VistaLink hotel API v2. Authenticate with `Authorization: Bearer vl_live_…` (or `vl_test_…`). Money is a decimal string with a sibling ISO 4217 `currency`. Every response carries `request_id` and `billing` (null when free); errors are `{error: {code, message, request_id, details?}}`. Rate-limit headers `X-RateLimit-Limit/Remaining/Reset`, credit header `X-Credit-Remaining` (USD).",
-    "version": "2.0.0",
-    "summary": "Hotel resolution, search, content, rates, room reconciliation and booking.",
+    "version": "2.1.0",
+    "summary": "Hotel resolution, search, content, rates, room reconciliation, booking and email quotes.",
     "contact": {
       "name": "VistaLink",
       "email": "contact@vistalink.com",
@@ -944,7 +944,7 @@
           "Bookings"
         ],
         "summary": "Create a booking",
-        "description": "Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`; bookings are free and `billing` is always null. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page).",
+        "description": "Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`; bookings are free and `billing` is always null. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page). `card_entry` is rolling out and answers 403 `not_yet_available` in production: it needs `payment_method` and `mandate`, answers `requires_credential`, and nothing touches the hotel until `POST /v2/bookings/{booking_id}/confirm`.",
         "operationId": "createBooking",
         "requestBody": {
           "content": {
@@ -1060,6 +1060,244 @@
         ]
       }
     },
+    "/v2/bookings/{booking_id}/confirm": {
+      "post": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Confirm a card-entry booking",
+        "description": "Rolling out; answers 403 not_yet_available in production. `card_entry` only: attaches the credential (or uses the one bound at create) and starts the booking on the hotel's own checkout, where the card is typed and the hotel charges it as merchant of record. Answers 202 with the Booking in `queued`; follow it with GET /v2/bookings/{booking_id} or `booking.updated`. Accepted only in `requires_credential` and only once: any other status, including `submitted` and `unknown`, is 409 `booking_not_confirmable`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`. Test keys get a simulated outcome chosen by the credential's test token.",
+        "operationId": "confirmBooking",
+        "parameters": [
+          {
+            "name": "booking_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Booking Id"
+            },
+            "description": "The `booking_id` returned by POST /v2/bookings.",
+            "example": "bk_P2w9Xc4Rt1Lm8Qz3",
+            "x-vistalink-render-default": true
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Required. Any unique string. Same key and same body returns the original response; same key and a different body is a 409.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "example": "4f1c2b8e-booking-ada-rossi",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmBookingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booking"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request (validation errors carry details.fields[])",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict (details.reason booking_not_confirmable, mandate_expired, credential_expired, credential_consumed, credential_deleted or credential_booking_mismatch)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-vistalink-kind": "job",
+        "x-vistalink-scope": "booking",
+        "x-vistalink-cli": "vistalink bookings confirm"
+      }
+    },
+    "/v2/payment_credentials": {
+      "post": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Register a payment credential",
+        "description": "Rolling out; answers 403 not_yet_available in production. Turns a Basis Theory card token you created with VistaLink's public key into a one-booking `cred_` credential for `payment.mode card_entry`. The card number never reaches VistaLink: we read the token masked and keep only brand, last four and expiry. A credential lasts 30 minutes (or less, with the token), pays for one booking, and its vault token is deleted once that booking is submitted or ends. Needs the `booking` scope and the Build plan or higher; `Idempotency-Key` is optional.",
+        "operationId": "createPaymentCredential",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentCredential"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request (validation errors carry details.fields[])",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict (details.reason credential_reused)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-vistalink-kind": "sync",
+        "x-vistalink-scope": "booking",
+        "x-vistalink-cli": "vistalink credentials create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Any unique string. Same key and same body returns the original response; same key and a different body is a 409.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "example": "4f1c2b8e-booking-ada-rossi",
+            "required": false
+          }
+        ]
+      }
+    },
     "/v2/bookings/{booking_id}": {
       "get": {
         "tags": [
@@ -1165,7 +1403,7 @@
           "Bookings"
         ],
         "summary": "Cancel a booking",
-        "description": "Synchronous and free; needs the `booking` scope. Allowed while the booking is `queued`, `requires_payment` or `requires_user_action`, and while `processing` only before the engine submit step; after that the cancel is refused with 409 `conflict`. Canceling after a completed checkout payment sets `payment.refund_required: true`.",
+        "description": "Synchronous and free; needs the `booking` scope. Allowed while the booking is `queued`, `requires_payment`, `requires_user_action` or `requires_credential`, and while `processing` only before the engine submit step; after that the cancel is refused with 409 `conflict`. Canceling after a completed checkout payment sets `payment.refund_required: true`.",
         "operationId": "cancelBooking",
         "parameters": [
           {
@@ -1266,6 +1504,489 @@
         "x-vistalink-kind": "sync",
         "x-vistalink-scope": "booking",
         "x-vistalink-cli": "vistalink bookings cancel"
+      }
+    },
+    "/v2/quotes": {
+      "post": {
+        "tags": [
+          "Quotes"
+        ],
+        "summary": "Request a quote from a hotel",
+        "description": "Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone: a simulated hotel answers within seconds, as `sandbox_outcome` says.",
+        "operationId": "createQuote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request (validation errors carry details.fields[])",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "insufficient_credit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Your open quote for the same hotel and stay, returned instead of a new one (header `X-Quote-Existing: true`); no new email, no charge.",
+            "headers": {
+              "X-Quote-Existing": {
+                "description": "`true`: this is an existing open quote.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          }
+        },
+        "x-vistalink-kind": "job",
+        "x-vistalink-scope": "quotes",
+        "x-vistalink-sku": [
+          "quote.email.received"
+        ],
+        "x-vistalink-sku-rule": "Reserved when the quote is created and charged once, when the hotel's first priced offer arrives. Released when the quote closes without one (declined, no reply, cancelled, failed). Returning your open quote for the same hotel and stay is free.",
+        "x-vistalink-cli": "vistalink quotes create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Required. Any unique string. Same key and same body returns the original response; same key and a different body is a 409.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "example": "4f1c2b8e-booking-ada-rossi",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/v2/quotes/{quote_id}": {
+      "get": {
+        "tags": [
+          "Quotes"
+        ],
+        "summary": "Get a quote",
+        "description": "Synchronous and free; needs the `quotes` scope. The quote's status, the hotel's offers and `next_step`, one sentence you can show as is.",
+        "operationId": "getQuote",
+        "parameters": [
+          {
+            "name": "quote_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Quote Id"
+            },
+            "description": "The `quote_id` returned by POST /v2/quotes.",
+            "example": "qte_7c2e9a4b1d8f3e6a0c5b",
+            "x-vistalink-render-default": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request (validation errors carry details.fields[])",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (missing scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-vistalink-kind": "sync",
+        "x-vistalink-scope": "quotes",
+        "x-vistalink-cli": "vistalink quotes get"
+      }
+    },
+    "/v2/quotes/{quote_id}/cancel": {
+      "post": {
+        "tags": [
+          "Quotes"
+        ],
+        "summary": "Cancel a quote",
+        "description": "Synchronous and free; needs the `quotes` scope. Stops further emails to the hotel while the quote is `queued`, `contacting`, `waiting` or `offer_received`; cancelling twice returns the cancelled quote. A quote cancelled before a priced offer costs nothing; one cancelled after keeps its charge. A closed quote answers 409 `conflict`.",
+        "operationId": "cancelQuote",
+        "parameters": [
+          {
+            "name": "quote_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Quote Id"
+            },
+            "description": "The `quote_id` returned by POST /v2/quotes.",
+            "example": "qte_7c2e9a4b1d8f3e6a0c5b",
+            "x-vistalink-render-default": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request (validation errors carry details.fields[])",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (missing scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict (the quote is already closed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-vistalink-kind": "sync",
+        "x-vistalink-scope": "quotes",
+        "x-vistalink-cli": "vistalink quotes cancel"
+      }
+    },
+    "/v2/quotes/{quote_id}/offers/{offer_id}/accept": {
+      "post": {
+        "tags": [
+          "Quotes"
+        ],
+        "summary": "Accept a quote offer",
+        "description": "Free; needs the `quotes` scope and the Build plan or higher. Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).",
+        "operationId": "acceptQuoteOffer",
+        "parameters": [
+          {
+            "name": "quote_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Quote Id"
+            },
+            "description": "The `quote_id` returned by POST /v2/quotes.",
+            "example": "qte_7c2e9a4b1d8f3e6a0c5b",
+            "x-vistalink-render-default": true
+          },
+          {
+            "name": "offer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Offer Id"
+            },
+            "description": "The `offer_id` of one of the quote's `offers`.",
+            "example": "qof_4a9d2c7e1b8f5a3d6e0c",
+            "x-vistalink-render-default": true
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Any unique string. Same key and same body returns the original response; same key and a different body is a 409.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "example": "4f1c2b8e-booking-ada-rossi",
+            "required": false
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteAcceptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request (validation errors carry details.fields[])",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found (quote or offer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict (the quote is closed, or another offer was accepted)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-vistalink-kind": "sync",
+        "x-vistalink-scope": "quotes",
+        "x-vistalink-cli": "vistalink quotes accept"
       }
     },
     "/v2/jobs/{job_id}": {
@@ -1788,7 +2509,7 @@
           "Webhooks"
         ],
         "summary": "Create a webhook",
-        "description": "Synchronous and free; each event needs its family's scope (`booking.updated` needs `booking`, `rates.*` need `rates`, `rooms.reconcile.completed` needs `reconcile`). Deliveries are signed POSTs described under Webhooks, retried after 1m, 5m, 30m, 2h, 12h and 24h; the `secret` is returned only in this response.",
+        "description": "Synchronous and free; each event needs its family's scope (`booking.updated` needs `booking`, `rates.*` need `rates`, `rooms.reconcile.completed` needs `reconcile`, `quote.updated` needs `quotes`). Deliveries are signed POSTs described under Webhooks, retried after 1m, 5m, 30m, 2h, 12h and 24h; the `secret` is returned only in this response.",
         "operationId": "createWebhook",
         "requestBody": {
           "content": {
@@ -2608,10 +3329,14 @@
               "confirmation_pending",
               "failed",
               "expired",
-              "canceled"
+              "canceled",
+              "requires_credential",
+              "submitted",
+              "requires_action",
+              "unknown"
             ],
             "title": "Status",
-            "description": "Where the booking is: `queued`, `processing`, `requires_payment` (show `payment.checkout_url`), `requires_user_action` (send the guest to `handoff.url`), then `confirmed`, `confirmation_pending` (submitted, confirmation not yet seen), `failed`, `expired` or `canceled`."
+            "description": "Where the booking is: `queued`, `processing`, `requires_payment` (show `payment.checkout_url`), `requires_user_action` (send the guest to `handoff.url`), then `confirmed`, `confirmation_pending` (submitted, confirmation not yet seen), `failed`, `expired` or `canceled`. Only `card_entry` bookings also use `requires_credential` (waiting for confirm), `submitted` (the hotel's pay button was pressed), `requires_action` (see `next_action`) and `unknown` (submitted, outcome not yet provable: tell the guest not to book again and to check their email from the hotel)."
           },
           "hotel_id": {
             "type": "string",
@@ -2702,12 +3427,94 @@
             },
             "type": "array",
             "title": "Timeline",
-            "description": "Every status the booking has been in, oldest first, starting with `queued`."
+            "description": "Every status the booking has been in, oldest first, starting with `queued` (`requires_credential` for `card_entry`)."
           },
           "billing": {
             "type": "null",
             "title": "Billing",
             "description": "Always null: bookings are free."
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version",
+            "description": "`card_entry` only: goes up by one on every change; apply a `booking.updated` event only when its `data.version` is higher than the last one you saw."
+          },
+          "mandate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookingMandate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`card_entry` only: what the guest approved."
+          },
+          "payment_method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookingPaymentMethod"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`card_entry` only: the card's brand, last four and expiry."
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextAction"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`card_entry` only: set exactly when `status` is `requires_action`."
+          },
+          "charges": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookingCharges"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`card_entry` only: the total the hotel's checkout showed."
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At",
+            "description": "`card_entry` only: when the hotel's pay button was pressed. Once set, the booking is never resubmitted and cannot be canceled."
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "`card_entry` only: in `requires_credential`, the deadline to confirm; null otherwise."
           }
         },
         "type": "object",
@@ -2892,8 +3699,143 @@
                 "state": "confirmed"
               }
             ]
+          },
+          {
+            "booking_id": "bk_C4r9Dn2Ty7Ek5Pw1",
+            "charges": {
+              "amount": "962.00",
+              "currency": "EUR",
+              "mismatch": false
+            },
+            "commission": {
+              "commissionable": true,
+              "partner_share": "0.50",
+              "rate": "0.10"
+            },
+            "confirmation": {
+              "at": "2026-10-07T09:31:20Z",
+              "code": "RX48219",
+              "evidence": "engine_confirmation_signal"
+            },
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "mandate": {
+              "accepted_total": "962.00",
+              "consent_at": "2026-10-07T09:29:12Z",
+              "currency": "EUR",
+              "expires_at": "2026-10-07T09:59:30Z",
+              "max_total": "962.00"
+            },
+            "offer": {
+              "availability": "available",
+              "board": "breakfast",
+              "channel": "direct",
+              "currency": "EUR",
+              "engine": "SYNXIS",
+              "excluded_charges": [],
+              "free_cancellation": false,
+              "includes_taxes": true,
+              "listing_key": "engine_room:1234567",
+              "member_rate": false,
+              "nightly_avg": "481.00",
+              "observed_at": "2026-10-07T09:30:00Z",
+              "occupancy": {
+                "adults": 2,
+                "children_ages": []
+              },
+              "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
+              "rate_name": "Non-refundable, breakfast included",
+              "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
+              "room_name": "Superior Room",
+              "total": "962.00",
+              "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+            },
+            "payment_method": {
+              "brand": "visa",
+              "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1",
+              "credential_status": "deleted",
+              "exp_month": 12,
+              "exp_year": 2028,
+              "last4": "4242",
+              "type": "card"
+            },
+            "revalidation": {
+              "checked_at": "2026-10-07T09:30:05Z",
+              "currency": "EUR",
+              "price_changed": false,
+              "total": "962.00"
+            },
+            "status": "confirmed",
+            "submitted_at": "2026-10-07T09:31:02Z",
+            "timeline": [
+              {
+                "at": "2026-10-07T09:29:30Z",
+                "state": "requires_credential"
+              },
+              {
+                "at": "2026-10-07T09:30:00Z",
+                "state": "queued"
+              },
+              {
+                "at": "2026-10-07T09:30:01Z",
+                "state": "processing"
+              },
+              {
+                "at": "2026-10-07T09:31:02Z",
+                "state": "submitted"
+              },
+              {
+                "at": "2026-10-07T09:31:20Z",
+                "state": "confirmed"
+              }
+            ],
+            "version": 6
           }
         ]
+      },
+      "BookingCharges": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount",
+            "description": "The engine's total, a decimal string."
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "description": "ISO 4217 currency of `amount`."
+          },
+          "mismatch": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mismatch",
+            "description": "True when the engine reported a charge above `mandate.max_total` after submit; ops is alerted."
+          }
+        },
+        "type": "object",
+        "title": "BookingCharges",
+        "description": "`card_entry` only: the amount the hotel's checkout showed, read in code, never typed by a model."
       },
       "BookingFailure": {
         "properties": {
@@ -2908,10 +3850,15 @@
               "payment_expired",
               "payment_failed",
               "unsupported_engine",
-              "payment_unavailable"
+              "payment_unavailable",
+              "card_declined",
+              "three_d_secure_failed",
+              "card_entry_failed",
+              "card_entry_unavailable",
+              "mandate_expired"
             ],
             "title": "Reason",
-            "description": "Stable failure code: `sold_out`, `price_changed` (revalidation), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`)."
+            "description": "Stable failure code: `sold_out`, `price_changed` (revalidation, or with `card_entry` the hotel's checkout total was above the accepted total; nothing was typed), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`). `card_entry` only: `card_declined` (the hotel's checkout declined the card; create a new booking with a new credential), `three_d_secure_failed`, `card_entry_failed` (stopped before the pay button; nothing was charged), `card_entry_unavailable` (card entry is not available for this engine right now), and `mandate_expired` on `expired` (not confirmed within 30 minutes)."
           },
           "message": {
             "anyOf": [
@@ -2964,6 +3911,50 @@
         ],
         "title": "BookingGuests",
         "description": "The guests of one room of the stay."
+      },
+      "BookingMandate": {
+        "properties": {
+          "accepted_total": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "title": "Accepted Total",
+            "description": "The total the guest accepted, in `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "description": "ISO 4217 currency."
+          },
+          "max_total": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "title": "Max Total",
+            "description": "The most the hotel's checkout may show before the card is typed; equals `accepted_total`."
+          },
+          "consent_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Consent At",
+            "description": "When the guest approved, as you sent it."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At",
+            "description": "The mandate's deadline: confirm before it, 30 minutes after create."
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted_total",
+          "currency",
+          "max_total",
+          "consent_at",
+          "expires_at"
+        ],
+        "title": "BookingMandate",
+        "description": "`card_entry` only: what the guest approved."
       },
       "BookingPayment": {
         "properties": {
@@ -3081,6 +4072,100 @@
         "title": "BookingPayment",
         "description": "The guest's payment. Null for `external` mode, and for `checkout` until the link is\nissued."
       },
+      "BookingPaymentMethod": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "card",
+            "title": "Type",
+            "description": "Always `card`."
+          },
+          "credential_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Id",
+            "description": "The `cred_` id; null until bound."
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand",
+            "description": "Card brand, for example `visa`."
+          },
+          "last4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last4",
+            "description": "Last four digits."
+          },
+          "exp_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exp Month",
+            "description": "Expiry month."
+          },
+          "exp_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exp Year",
+            "description": "Expiry year."
+          },
+          "credential_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "bound",
+                  "consumed",
+                  "deleted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Status",
+            "description": "The credential's status; see `PaymentCredential.status`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "BookingPaymentMethod",
+        "description": "`card_entry` only: the card's metadata. Never the card number or CVC."
+      },
       "BookingRequest": {
         "properties": {
           "hotel_id": {
@@ -3112,6 +4197,28 @@
           "payment": {
             "$ref": "#/components/schemas/Payment",
             "description": "How the guest will pay."
+          },
+          "payment_method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentMethod"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required with `payment.mode` `card_entry`, refused otherwise."
+          },
+          "mandate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Mandate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required with `payment.mode` `card_entry`, refused otherwise."
           },
           "special_requests": {
             "anyOf": [
@@ -3203,6 +4310,51 @@
               "locale": "en",
               "mode": "checkout",
               "return_url": "https://partner.example/booking/done"
+            },
+            "special_requests": "Late arrival",
+            "stay": {
+              "check_in": "2026-11-14",
+              "check_out": "2026-11-16",
+              "rooms": [
+                {
+                  "adults": 2,
+                  "children_ages": []
+                }
+              ]
+            }
+          },
+          {
+            "guests": [
+              {
+                "lead": {
+                  "email": "ada@example.com",
+                  "first_name": "Ada",
+                  "last_name": "Rossi",
+                  "phone": "+390600000000"
+                },
+                "occupants": [],
+                "room": 0
+              }
+            ],
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "mandate": {
+              "accepted_total": "962.00",
+              "consent": {
+                "cardholder_authorized": true,
+                "display_hash": "sha256:9b1e5c0d2a7f43e8b6c1d9a04f7e2b3c5d8a1f6e0b9c2d7a4e3f1b8c6d5a0e9f",
+                "method": "explicit_ui_confirmation",
+                "obtained_at": "2026-10-07T09:29:12Z"
+              },
+              "currency": "EUR"
+            },
+            "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
+            "payment": {
+              "locale": "en",
+              "mode": "card_entry"
+            },
+            "payment_method": {
+              "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1",
+              "type": "card"
             },
             "special_requests": "Late arrival",
             "stay": {
@@ -3957,6 +5109,32 @@
         "title": "Commission",
         "description": "Commission on a confirmed booking. Null until the booking is confirmed."
       },
+      "ConfirmBookingRequest": {
+        "properties": {
+          "credential_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^cred_[A-Za-z0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Id",
+            "description": "The `cred_` id to charge; omit it when it was sent as `payment_method.credential_id` at create. Must be active, unexpired, yours and not bound to another booking."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConfirmBookingRequest",
+        "description": "Body of `POST /v2/bookings/{booking_id}/confirm`.",
+        "examples": [
+          {
+            "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1"
+          }
+        ]
+      },
       "Confirmation": {
         "properties": {
           "code": {
@@ -4001,6 +5179,66 @@
         ],
         "title": "Confirmation",
         "description": "Proof that the hotel's engine accepted the reservation. Present once `status` is\n`confirmed`."
+      },
+      "Consent": {
+        "properties": {
+          "obtained_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Obtained At",
+            "description": "When the guest approved the summary (hotel, room, rate, dates, party, total and cancellation terms), RFC 3339; at most 15 minutes before the create call."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "explicit_ui_confirmation",
+              "explicit_chat_confirmation"
+            ],
+            "title": "Method",
+            "description": "`explicit_ui_confirmation` (a button on a screen showing the summary) or `explicit_chat_confirmation` (an agent turn that showed the summary and got a yes in that same turn)."
+          },
+          "cardholder_authorized": {
+            "type": "boolean",
+            "const": true,
+            "title": "Cardholder Authorized",
+            "description": "Must be `true`: you attest that the guest is the cardholder, or is authorised to use the card, for this booking."
+          },
+          "display_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Hash",
+            "description": "Optional `sha256:` hash of the canonical JSON you showed the guest; stored as evidence."
+          },
+          "user_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Ref",
+            "description": "Optional opaque id of the guest in your system; stored as evidence, never echoed."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "obtained_at",
+          "method",
+          "cardholder_authorized"
+        ],
+        "title": "Consent",
+        "description": "`card_entry` only: your record that the cardholder approved this exact booking."
       },
       "DetailCore": {
         "properties": {
@@ -4784,7 +6022,7 @@
               "unavailable"
             ],
             "title": "Code",
-            "description": "Stable error code; the HTTP status follows from it (`bad_request` 400, `unauthorized` 401, `insufficient_credit` 402, `forbidden` 403, `not_found` 404, `conflict` 409, `rate_limited` 429, `upstream_error` 502, `unavailable` 503)."
+            "description": "Stable error code; the HTTP status follows from it (`bad_request` 400, `unauthorized` 401, `insufficient_credit` 402, `forbidden` 403, `not_found` 404, `conflict` 409, `rate_limited` 429, `upstream_error` 502, `unavailable` 503). A method the route does not accept is `bad_request` with status 405."
           },
           "message": {
             "type": "string",
@@ -6002,6 +7240,35 @@
         "title": "LocationFilter",
         "description": "Where to search: either `city` with `country`, or a `place_id` from an earlier response,\nnever both."
       },
+      "Mandate": {
+        "properties": {
+          "accepted_total": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "title": "Accepted Total",
+            "description": "The total the guest saw and accepted, a decimal string; must equal the offer's `total` to the cent. A higher engine total fails the booking with `price_changed` before the card is typed; a lower one goes ahead."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "description": "ISO 4217 currency of `accepted_total`; must be the offer's."
+          },
+          "consent": {
+            "$ref": "#/components/schemas/Consent",
+            "description": "The guest's approval of this booking."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "accepted_total",
+          "currency",
+          "consent"
+        ],
+        "title": "Mandate",
+        "description": "`card_entry` only: the total the guest accepted. We never press the hotel's pay button above\nit."
+      },
       "NearFilter": {
         "properties": {
           "lat": {
@@ -6086,6 +7353,44 @@
         ],
         "title": "NearestListing",
         "description": "The closest candidate an unmatched listing had, below `min_confidence`."
+      },
+      "NextAction": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "three_d_secure_app",
+              "three_d_secure_otp"
+            ],
+            "title": "Type",
+            "description": "`three_d_secure_app`: tell the guest to approve the payment in their banking app; call nothing. `three_d_secure_otp`: the bank's challenge asks for a code the guest received; the challenge is watched until `expires_at` (a relay endpoint is not available yet)."
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "The bank's deadline, RFC 3339 UTC."
+          },
+          "cancelable": {
+            "type": "boolean",
+            "title": "Cancelable",
+            "description": "Always false: the card was already submitted.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "NextAction",
+        "description": "`card_entry` only, non-null exactly when `status` is `requires_action`: what the guest must do."
       },
       "Notice": {
         "properties": {
@@ -6551,10 +7856,11 @@
             "enum": [
               "checkout",
               "handoff",
-              "external"
+              "external",
+              "card_entry"
             ],
             "title": "Mode",
-            "description": "`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page."
+            "description": "`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (rolling out; answers 403 `not_yet_available` in production) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record."
           },
           "return_url": {
             "anyOf": [
@@ -6592,6 +7898,191 @@
         ],
         "title": "Payment",
         "description": "How the guest pays. The guest always pays the property directly; VistaLink never holds\nthe funds."
+      },
+      "PaymentCredential": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "description": "Opaque id of this request, also sent as the `X-Request-Id` header; quote it when contacting support."
+          },
+          "billing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Billing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What this call cost, or null when it was free."
+          },
+          "credential_id": {
+            "type": "string",
+            "title": "Credential Id",
+            "description": "Credential id, `cred_` plus 24 letters and digits."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "bound",
+              "consumed",
+              "deleted"
+            ],
+            "title": "Status",
+            "description": "`active` (unused), `bound` (attached to `booking_id`), `consumed` (handed to the hotel's checkout) or `deleted` (the vault token was deleted)."
+          },
+          "booking_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Booking Id",
+            "description": "The booking it is bound to; null until then."
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand",
+            "description": "Card brand, for example `visa`; null when unknown."
+          },
+          "last4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last4",
+            "description": "Last four digits of the card."
+          },
+          "exp_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exp Month",
+            "description": "Card expiry month, 1 to 12."
+          },
+          "exp_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exp Year",
+            "description": "Card expiry year, four digits."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At",
+            "description": "When the credential stops being usable: 30 minutes after creation, or the token's own expiry if sooner."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the credential was created, RFC 3339 UTC."
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "credential_id",
+          "status",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "PaymentCredential",
+        "description": "A one-booking card credential. It never carries the card number or CVC.",
+        "examples": [
+          {
+            "brand": "visa",
+            "created_at": "2026-10-07T09:29:00Z",
+            "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1",
+            "exp_month": 12,
+            "exp_year": 2028,
+            "expires_at": "2026-10-07T09:59:00Z",
+            "last4": "4242",
+            "request_id": "req_8f2c1a9b3d4e5f60",
+            "status": "active"
+          }
+        ]
+      },
+      "PaymentCredentialRequest": {
+        "properties": {
+          "bt_token_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Bt Token Id",
+            "description": "The id of a Basis Theory `card` token you created with VistaLink's public key (type `card`, `expires_at` at most 60 minutes ahead, a fresh token per booking). The card number never reaches VistaLink. Test keys accept only `tok_test_confirmed`, `tok_test_requires_action`, `tok_test_card_declined`, `tok_test_unknown` and `tok_test_price_changed`."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "bt_token_id"
+        ],
+        "title": "PaymentCredentialRequest",
+        "description": "Body of `POST /v2/payment_credentials`.",
+        "examples": [
+          {
+            "bt_token_id": "2b8f4c1e-6d3a-4e7b-9c0f-5a1d8e2b7c64"
+          }
+        ]
+      },
+      "PaymentMethod": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "card",
+            "title": "Type",
+            "description": "Always `card` in this version."
+          },
+          "credential_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^cred_[A-Za-z0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Id",
+            "description": "A `cred_` id from `POST /v2/payment_credentials`, bound to this booking at create. Omit it to send it with `POST /v2/bookings/{booking_id}/confirm` instead."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "PaymentMethod",
+        "description": "`card_entry` only: the card the hotel's engine charges, as a credential from\n`POST /v2/payment_credentials`."
       },
       "Policy": {
         "properties": {
@@ -6663,6 +8154,30 @@
         "title": "Preferences",
         "description": "Soft signals that shape semantic ranking without excluding hotels."
       },
+      "PriceToBeat": {
+        "properties": {
+          "total": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "title": "Total",
+            "description": "Price for the whole stay and party, a positive decimal string in `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "description": "ISO 4217 currency of `total`."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "currency"
+        ],
+        "title": "PriceToBeat",
+        "description": "A price you already hold for the same stay and party, which the hotel is asked to beat."
+      },
       "Provenance": {
         "properties": {
           "profile_source": {
@@ -6710,6 +8225,878 @@
         "type": "object",
         "title": "Provenance",
         "description": "Where the hotel's content comes from."
+      },
+      "Quote": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "Id of the request that returned this quote; null in webhook payloads."
+          },
+          "quote_id": {
+            "type": "string",
+            "title": "Quote Id",
+            "description": "Quote id, `qte_` plus 20 hex characters."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "contacting",
+              "waiting",
+              "offer_received",
+              "completed",
+              "no_response",
+              "declined",
+              "cancelled",
+              "failed",
+              "accepted"
+            ],
+            "title": "Status",
+            "description": "Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`."
+          },
+          "hotel_id": {
+            "type": "string",
+            "title": "Hotel Id",
+            "description": "The hotel asked.",
+            "format": "uuid"
+          },
+          "stay": {
+            "$ref": "#/components/schemas/QuoteStay",
+            "description": "The stay asked about."
+          },
+          "wants": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteWantsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The preferences sent, or null."
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The price the hotel was asked to beat, or null when there was none."
+          },
+          "deadline_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deadline At",
+            "description": "When the hotel's time to reply ends, RFC 3339 UTC."
+          },
+          "next_step": {
+            "type": "string",
+            "title": "Next Step",
+            "description": "One plain sentence on what happens next, suitable to show in your own interface."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the quote was requested, RFC 3339 UTC."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When the quote last changed, RFC 3339 UTC."
+          },
+          "offers": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteOffer"
+            },
+            "type": "array",
+            "title": "Offers",
+            "description": "Priced offers from the hotel's replies, oldest first."
+          },
+          "accepted_offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted Offer Id",
+            "description": "The offer you accepted; null until `status` is `accepted`."
+          },
+          "hotel_commission_applies": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotel Commission Applies",
+            "description": "After acceptance: true when the hotel pays a commission on the booking (half of it is yours), false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known."
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_contact_email",
+                  "hotel_suppressed",
+                  "hotel_daily_ceiling",
+                  "invalid_stay",
+                  "invalid_request",
+                  "opted_out",
+                  "unreachable",
+                  "rejected"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason",
+            "description": "Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable` or `rejected`; null otherwise."
+          },
+          "billing": {
+            "type": "null",
+            "title": "Billing",
+            "description": "Always null on responses: the quote fee is charged once, when the hotel's first priced offer arrives, and shows in usage."
+          }
+        },
+        "type": "object",
+        "required": [
+          "quote_id",
+          "status",
+          "hotel_id",
+          "stay",
+          "deadline_at",
+          "next_step",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Quote",
+        "description": "A request for a price quote, emailed to the hotel by VistaLink. Returned by create, get,\ncancel and accept, and as `data` in `quote.updated`.",
+        "examples": [
+          {
+            "anchor": {
+              "currency": "EUR",
+              "nightly": "481.00",
+              "source": "third_party",
+              "total": "962.00"
+            },
+            "created_at": "2026-10-07T09:30:00Z",
+            "deadline_at": "2026-10-09T09:30:00Z",
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "next_step": "Email sent to the hotel; most hotels reply within 6 hours, some take a day.",
+            "offers": [],
+            "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+            "status": "waiting",
+            "stay": {
+              "check_in": "2026-11-14",
+              "check_out": "2026-11-16",
+              "rooms": [
+                {
+                  "adults": 2,
+                  "children_ages": []
+                }
+              ]
+            },
+            "updated_at": "2026-10-07T09:30:04Z",
+            "wants": {
+              "board": "breakfast",
+              "refundable": true,
+              "room_type": "double"
+            }
+          },
+          {
+            "anchor": {
+              "currency": "EUR",
+              "nightly": "481.00",
+              "source": "third_party",
+              "total": "962.00"
+            },
+            "created_at": "2026-10-07T09:30:00Z",
+            "deadline_at": "2026-10-09T09:30:00Z",
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "next_step": "The hotel replied with an offer. Accept it to introduce your guest.",
+            "offers": [
+              {
+                "beats_by": "82.00",
+                "board": "breakfast",
+                "cancellation_deadline": "2026-11-12T23:59:00Z",
+                "confidence": 0.93,
+                "currency": "EUR",
+                "evidence": "We can offer the Superior Double with breakfast for EUR 880 for both nights, free cancellation until 12 November.",
+                "free_cancellation": true,
+                "includes_taxes": true,
+                "needs_review": false,
+                "nightly_avg": "440.00",
+                "offer_id": "qof_4a9d2c7e1b8f5a3d6e0c",
+                "rate_name": "Breakfast included, free cancellation",
+                "room_name": "Superior Double",
+                "source": "email",
+                "total": "880.00",
+                "valid_until": "2026-10-10"
+              }
+            ],
+            "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+            "status": "offer_received",
+            "stay": {
+              "check_in": "2026-11-14",
+              "check_out": "2026-11-16",
+              "rooms": [
+                {
+                  "adults": 2,
+                  "children_ages": []
+                }
+              ]
+            },
+            "updated_at": "2026-10-07T14:52:10Z",
+            "wants": {
+              "board": "breakfast",
+              "refundable": true,
+              "room_type": "double"
+            }
+          },
+          {
+            "accepted_offer_id": "qof_4a9d2c7e1b8f5a3d6e0c",
+            "anchor": {
+              "currency": "EUR",
+              "nightly": "481.00",
+              "source": "third_party",
+              "total": "962.00"
+            },
+            "created_at": "2026-10-07T09:30:00Z",
+            "deadline_at": "2026-10-09T09:30:00Z",
+            "hotel_commission_applies": false,
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "next_step": "Your guest has been introduced to the hotel by email; the hotel replies to them directly to confirm the booking.",
+            "offers": [
+              {
+                "beats_by": "82.00",
+                "board": "breakfast",
+                "cancellation_deadline": "2026-11-12T23:59:00Z",
+                "confidence": 0.93,
+                "currency": "EUR",
+                "evidence": "We can offer the Superior Double with breakfast for EUR 880 for both nights, free cancellation until 12 November.",
+                "free_cancellation": true,
+                "includes_taxes": true,
+                "needs_review": false,
+                "nightly_avg": "440.00",
+                "offer_id": "qof_4a9d2c7e1b8f5a3d6e0c",
+                "rate_name": "Breakfast included, free cancellation",
+                "room_name": "Superior Double",
+                "source": "email",
+                "total": "880.00",
+                "valid_until": "2026-10-10"
+              }
+            ],
+            "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+            "status": "accepted",
+            "stay": {
+              "check_in": "2026-11-14",
+              "check_out": "2026-11-16",
+              "rooms": [
+                {
+                  "adults": 2,
+                  "children_ages": []
+                }
+              ]
+            },
+            "updated_at": "2026-10-07T15:10:31Z",
+            "wants": {
+              "board": "breakfast",
+              "refundable": true,
+              "room_type": "double"
+            }
+          }
+        ]
+      },
+      "QuoteAcceptRequest": {
+        "properties": {
+          "guest": {
+            "$ref": "#/components/schemas/QuoteGuest",
+            "description": "The guest to introduce to the hotel."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "guest"
+        ],
+        "title": "QuoteAcceptRequest",
+        "description": "Body of `POST /v2/quotes/{quote_id}/offers/{offer_id}/accept`.",
+        "examples": [
+          {
+            "guest": {
+              "email": "ada@example.com",
+              "first_name": "Ada",
+              "last_name": "Rossi"
+            }
+          }
+        ]
+      },
+      "QuoteAnchor": {
+        "properties": {
+          "total": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "title": "Total",
+            "description": "Price for the whole stay and party, a decimal string in `currency`."
+          },
+          "nightly": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nightly",
+            "description": "`total` divided by the number of nights."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "description": "ISO 4217 currency of `total`."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "third_party",
+              "partner"
+            ],
+            "title": "Source",
+            "description": "`third_party` when it is the best public online price we know, `partner` when you sent it."
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "currency",
+          "source"
+        ],
+        "title": "QuoteAnchor",
+        "description": "The price the hotel was asked to beat."
+      },
+      "QuoteGuest": {
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "First Name",
+            "description": "Guest's first name, up to 80 characters."
+          },
+          "last_name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Last Name",
+            "description": "Guest's last name, up to 80 characters."
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "minLength": 6,
+            "title": "Email",
+            "description": "Guest's email address; the guest is copied on the introduction email and the hotel replies to it.",
+            "format": "email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "first_name",
+          "last_name",
+          "email"
+        ],
+        "title": "QuoteGuest",
+        "description": "The guest introduced to the hotel when you accept an offer."
+      },
+      "QuoteOffer": {
+        "properties": {
+          "offer_id": {
+            "type": "string",
+            "title": "Offer Id",
+            "description": "Offer id, `qof_` plus 20 hex characters; pass it to accept."
+          },
+          "source": {
+            "type": "string",
+            "const": "email",
+            "title": "Source",
+            "description": "Always `email`: the hotel's emailed reply.",
+            "default": "email"
+          },
+          "room_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Name",
+            "description": "Room the hotel offered, as it named it."
+          },
+          "rate_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Name",
+            "description": "Short summary of the terms, for example `Breakfast included, free cancellation`."
+          },
+          "total": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d+)?$",
+            "title": "Total",
+            "description": "Price for the whole stay and party, a decimal string in `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "description": "ISO 4217 currency the hotel quoted in; never converted."
+          },
+          "nightly_avg": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nightly Avg",
+            "description": "`total` divided by the number of nights."
+          },
+          "includes_taxes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Includes Taxes",
+            "description": "True when the hotel said taxes are included, false when not, null when it did not say."
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "breakfast",
+                  "half",
+                  "full",
+                  "all_inclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board",
+            "description": "Meals included, or null when the hotel did not say."
+          },
+          "free_cancellation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Cancellation",
+            "description": "True when the offer can be canceled free of charge, false when not, null when unknown."
+          },
+          "cancellation_deadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Deadline",
+            "description": "Last moment to cancel free of charge, RFC 3339, when the hotel gave one."
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until",
+            "description": "Last day the hotel holds this price, YYYY-MM-DD, when it said so."
+          },
+          "offer_link": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Link",
+            "description": "A booking link the hotel included in its reply, or null."
+          },
+          "beats_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beats By",
+            "description": "How much cheaper than the `anchor` price this offer is, in `currency`; null without a comparable anchor."
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence",
+            "description": "The sentence of the hotel's reply the price was read from, up to 280 characters."
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "How sure the reading of the reply is, 0 to 1."
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review",
+            "description": "True when the reply was ambiguous and the price is being checked: show it with care, it cannot be accepted yet (409 `offer_needs_review`) and it is not charged for. The hotel's first offer with `needs_review` false is the one the quote fee is charged on.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "offer_id",
+          "total",
+          "currency"
+        ],
+        "title": "QuoteOffer",
+        "description": "One priced offer the hotel sent by email, read from its reply."
+      },
+      "QuoteRequest": {
+        "properties": {
+          "hotel_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Hotel Id",
+            "description": "The hotel to ask, as returned by resolve or search.",
+            "format": "uuid"
+          },
+          "stay": {
+            "$ref": "#/components/schemas/Stay",
+            "description": "Dates and party to ask about; `check_in` must be today or later."
+          },
+          "wants": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteWants"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Room, board and cancellation preferences passed on to the hotel; omit to ask for the best rate."
+          },
+          "price_to_beat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "auto"
+              },
+              {
+                "$ref": "#/components/schemas/PriceToBeat"
+              }
+            ],
+            "title": "Price To Beat",
+            "description": "`auto` (the default) quotes the best public price we know for the stay as the price to beat, when there is one; `{total, currency}` uses your own price instead.",
+            "default": "auto"
+          },
+          "deadline_hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Deadline Hours",
+            "description": "Hours the hotel has to reply, 1 to 168; default 48. A quote with no priced reply by then closes as `no_response` and costs nothing.",
+            "default": 48
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z]{2}(-[A-Za-z]{2})?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale",
+            "description": "Language of the email to the hotel, as a language tag such as `en` or `it`; the hotel's own language when omitted."
+          },
+          "sandbox_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "offer",
+                  "declined",
+                  "no_response"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox Outcome",
+            "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 on a live key."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "hotel_id",
+          "stay"
+        ],
+        "title": "QuoteRequest",
+        "description": "Body of `POST /v2/quotes`.",
+        "examples": [
+          {
+            "deadline_hours": 48,
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "locale": "en",
+            "price_to_beat": "auto",
+            "stay": {
+              "check_in": "2026-11-14",
+              "check_out": "2026-11-16",
+              "rooms": [
+                {
+                  "adults": 2,
+                  "children_ages": []
+                }
+              ]
+            },
+            "wants": {
+              "board": "breakfast",
+              "refundable": true,
+              "room_type": "double"
+            }
+          },
+          {
+            "deadline_hours": 48,
+            "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+            "locale": "en",
+            "price_to_beat": {
+              "currency": "EUR",
+              "total": "962.00"
+            },
+            "stay": {
+              "check_in": "2026-11-14",
+              "check_out": "2026-11-16",
+              "rooms": [
+                {
+                  "adults": 2,
+                  "children_ages": []
+                }
+              ]
+            },
+            "wants": {
+              "board": "breakfast",
+              "refundable": true,
+              "room_type": "double"
+            }
+          }
+        ]
+      },
+      "QuoteStay": {
+        "properties": {
+          "check_in": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In",
+            "description": "Arrival date, YYYY-MM-DD."
+          },
+          "check_out": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out",
+            "description": "Departure date, YYYY-MM-DD."
+          },
+          "rooms": {
+            "items": {
+              "$ref": "#/components/schemas/Occupancy"
+            },
+            "type": "array",
+            "title": "Rooms",
+            "description": "One entry per room."
+          }
+        },
+        "type": "object",
+        "required": [
+          "check_in",
+          "check_out"
+        ],
+        "title": "QuoteStay",
+        "description": "The stay a quote asks about."
+      },
+      "QuoteWants": {
+        "properties": {
+          "refundable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refundable",
+            "description": "True to ask for a rate with free cancellation, false for the cheapest non-refundable one."
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "breakfast",
+                  "half",
+                  "full",
+                  "all_inclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board",
+            "description": "Meals to ask for: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`."
+          },
+          "room_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Type",
+            "description": "Room type to ask for in plain words, for example `double` or `junior suite`; up to 60 characters, no links, email addresses or angle brackets (it is quoted to the hotel)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "QuoteWants",
+        "description": "What the guest would like; every field is optional and is passed on to the hotel as a\npreference, not a filter."
+      },
+      "QuoteWantsOut": {
+        "properties": {
+          "refundable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refundable",
+            "description": "Free cancellation asked for, or null."
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "breakfast",
+                  "half",
+                  "full",
+                  "all_inclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board",
+            "description": "Meals asked for, or null."
+          },
+          "room_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Type",
+            "description": "Room type asked for, or null."
+          }
+        },
+        "type": "object",
+        "title": "QuoteWantsOut",
+        "description": "The preferences sent with the quote request."
       },
       "RateChannel": {
         "properties": {
@@ -9393,7 +11780,11 @@
               "confirmation_pending",
               "failed",
               "expired",
-              "canceled"
+              "canceled",
+              "requires_credential",
+              "submitted",
+              "requires_action",
+              "unknown"
             ],
             "title": "State",
             "description": "The status the booking moved to."
@@ -9841,7 +12232,8 @@
                 "rates.completed",
                 "rates.batch.completed",
                 "rooms.reconcile.completed",
-                "booking.updated"
+                "booking.updated",
+                "quote.updated"
               ]
             },
             "type": "array",
@@ -9887,14 +12279,15 @@
                 "rates.completed",
                 "rates.batch.completed",
                 "rooms.reconcile.completed",
-                "booking.updated"
+                "booking.updated",
+                "quote.updated"
               ]
             },
             "type": "array",
-            "maxItems": 4,
+            "maxItems": 5,
             "minItems": 1,
             "title": "Events",
-            "description": "Events to deliver, each needing its family's scope on the key: `booking.updated` (booking), `rates.completed` and `rates.batch.completed` (rates), `rooms.reconcile.completed` (reconcile)."
+            "description": "Events to deliver, each needing its family's scope on the key: `booking.updated` (booking), `rates.completed` and `rates.batch.completed` (rates), `rooms.reconcile.completed` (reconcile), `quote.updated` (quotes)."
           },
           "secret": {
             "anyOf": [
@@ -9970,7 +12363,8 @@
                 "rates.completed",
                 "rates.batch.completed",
                 "rooms.reconcile.completed",
-                "booking.updated"
+                "booking.updated",
+                "quote.updated"
               ]
             },
             "type": "array",
@@ -10022,7 +12416,8 @@
               "rates.completed",
               "rates.batch.completed",
               "rooms.reconcile.completed",
-              "booking.updated"
+              "booking.updated",
+              "quote.updated"
             ],
             "title": "Event",
             "description": "The event delivered."
@@ -10368,12 +12763,13 @@
         ],
         "properties": {
           "event": {
-            "description": "The event: `rates.completed`, `rates.batch.completed` or `rooms.reconcile.completed` when a job finishes (succeeded or failed), `booking.updated` when a booking's status or payment status changes.",
+            "description": "The event: `rates.completed`, `rates.batch.completed` or `rooms.reconcile.completed` when a job finishes (succeeded or failed), `booking.updated` when a booking's status or payment status changes, `quote.updated` when a quote's status changes or the hotel sends an offer.",
             "enum": [
               "rates.completed",
               "rates.batch.completed",
               "rooms.reconcile.completed",
-              "booking.updated"
+              "booking.updated",
+              "quote.updated"
             ],
             "title": "Event",
             "type": "string"
@@ -10391,7 +12787,7 @@
           },
           "data": {
             "additionalProperties": true,
-            "description": "The Job for job events, the Booking for `booking.updated`.",
+            "description": "The Job for job events, the Booking for `booking.updated`, the Quote for `quote.updated`.",
             "title": "Data",
             "type": "object"
           }
@@ -10410,7 +12806,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "`Authorization: Bearer vl_live_…` or `vl_test_…`. Keys carry scopes: `search`, `content`, `rates`, `reconcile`, `booking`, `chat`."
+        "description": "`Authorization: Bearer vl_live_…` or `vl_test_…`. Keys carry scopes: `search`, `content`, `rates`, `reconcile`, `booking`, `chat`, `quotes`."
       }
     }
   },
@@ -10440,12 +12836,16 @@
       "description": "Book an offer on the hotel's own engine."
     },
     {
+      "name": "Quotes",
+      "description": "Ask a hotel by email for a direct price, then introduce your guest."
+    },
+    {
       "name": "Jobs",
       "description": "Background work: poll or cancel."
     },
     {
       "name": "Webhooks",
-      "description": "Get told when a job or booking moves."
+      "description": "Get told when a job, booking or quote moves."
     },
     {
       "name": "Chat",
@@ -10612,7 +13012,7 @@
     "booking.updated": {
       "post": {
         "summary": "booking.updated",
-        "description": "Every change to a booking's `status` or `payment.status`. `data` is the Booking.",
+        "description": "Every change to a booking's `status` or `payment.status`, and for `card_entry` to `next_action`. `data` is the Booking; its `payment_method` carries no card data (only `type`, `credential_id`, `credential_status`), and a `card_entry` booking's `version` orders events.",
         "operationId": "onBookingUpdated",
         "parameters": [
           {
@@ -10643,6 +13043,55 @@
                       },
                       "data": {
                         "$ref": "#/components/schemas/Booking"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Any 2xx acknowledges. Anything else is retried: 1m, 5m, 30m, 2h, 12h, 24h."
+          }
+        }
+      }
+    },
+    "quote.updated": {
+      "post": {
+        "summary": "quote.updated",
+        "description": "Every change to a quote's `status`, each new offer from the hotel and the acceptance. `data` is the Quote.",
+        "operationId": "onQuoteUpdated",
+        "parameters": [
+          {
+            "name": "X-VistaLink-Signature",
+            "in": "header",
+            "required": true,
+            "description": "`t=<unix>,v1=<hex>`. v1 is HMAC-SHA256 of `<t>.<raw body>` with your secret.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "t=1791364462,v1=5f2c…"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WebhookEventPayload"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "event": {
+                        "const": "quote.updated"
+                      },
+                      "data": {
+                        "$ref": "#/components/schemas/Quote"
                       }
                     }
                   }

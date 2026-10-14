@@ -70,9 +70,9 @@
         "search",
         "run",
         "--query",
-        "quiet place near the Colosseum with a rooftop, under 400 a night",
+        "quiet place near the Trevi Fountain with a rooftop, under 500 a night",
         "--filters",
-        "{\"location\":{\"city\":\"Rome\",\"country\":\"IT\"},\"stay\":{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]},\"budget\":{\"min\":\"100\",\"max\":\"400\",\"currency\":\"EUR\",\"basis\":\"per_room_per_night\"},\"min_stars\":4,\"amenities\":[\"POOL\",\"SPA\"]}",
+        "{\"location\":{\"city\":\"Rome\",\"country\":\"IT\"},\"stay\":{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]},\"budget\":{\"min\":\"100\",\"max\":\"500\",\"currency\":\"EUR\",\"basis\":\"per_room_per_night\"},\"min_stars\":4,\"amenities\":[\"POOL\",\"SPA\"]}",
         "--preferences",
         "{\"text\":\"romantic, great breakfast\",\"tags\":[\"ROMANTIC\"]}",
         "--ranking",
@@ -93,7 +93,7 @@
       "path": {},
       "query": {},
       "body": {
-        "query": "quiet place near the Colosseum with a rooftop, under 400 a night",
+        "query": "quiet place near the Trevi Fountain with a rooftop, under 500 a night",
         "filters": {
           "location": {
             "city": "Rome",
@@ -111,7 +111,7 @@
           },
           "budget": {
             "min": "100",
-            "max": "400",
+            "max": "500",
             "currency": "EUR",
             "basis": "per_room_per_night"
           },
@@ -336,6 +336,45 @@
       "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
     },
     {
+      "key": "POST /v2/bookings/{booking_id}/confirm",
+      "cli": "vistalink bookings confirm",
+      "argv": [
+        "bookings",
+        "confirm",
+        "bk_P2w9Xc4Rt1Lm8Qz3",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--credential-id",
+        "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1"
+      ],
+      "path": {
+        "booking_id": "bk_P2w9Xc4Rt1Lm8Qz3"
+      },
+      "query": {},
+      "body": {
+        "credential_id": "cred_Hk2v9Qx0aL7mN3pZr5Tb8Wd1"
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
+      "key": "POST /v2/payment_credentials",
+      "cli": "vistalink credentials create",
+      "argv": [
+        "credentials",
+        "create",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--bt-token-id",
+        "2b8f4c1e-6d3a-4e7b-9c0f-5a1d8e2b7c64"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "bt_token_id": "2b8f4c1e-6d3a-4e7b-9c0f-5a1d8e2b7c64"
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
       "key": "GET /v2/bookings/{booking_id}",
       "cli": "vistalink bookings get",
       "argv": [
@@ -360,6 +399,105 @@
         "booking_id": "bk_P2w9Xc4Rt1Lm8Qz3"
       },
       "query": {}
+    },
+    {
+      "key": "POST /v2/quotes",
+      "cli": "vistalink quotes create",
+      "argv": [
+        "quotes",
+        "create",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--hotel-id",
+        "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "--stay",
+        "{\"check_in\":\"2026-11-14\",\"check_out\":\"2026-11-16\",\"rooms\":[{\"adults\":2,\"children_ages\":[]}]}",
+        "--wants",
+        "{\"refundable\":true,\"board\":\"breakfast\",\"room_type\":\"double\"}",
+        "--price-to-beat",
+        "auto",
+        "--deadline-hours",
+        "48",
+        "--locale",
+        "en"
+      ],
+      "path": {},
+      "query": {},
+      "body": {
+        "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+        "stay": {
+          "check_in": "2026-11-14",
+          "check_out": "2026-11-16",
+          "rooms": [
+            {
+              "adults": 2,
+              "children_ages": []
+            }
+          ]
+        },
+        "wants": {
+          "refundable": true,
+          "board": "breakfast",
+          "room_type": "double"
+        },
+        "price_to_beat": "auto",
+        "deadline_hours": 48,
+        "locale": "en"
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
+    },
+    {
+      "key": "GET /v2/quotes/{quote_id}",
+      "cli": "vistalink quotes get",
+      "argv": [
+        "quotes",
+        "get",
+        "qte_7c2e9a4b1d8f3e6a0c5b"
+      ],
+      "path": {
+        "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b"
+      },
+      "query": {}
+    },
+    {
+      "key": "POST /v2/quotes/{quote_id}/cancel",
+      "cli": "vistalink quotes cancel",
+      "argv": [
+        "quotes",
+        "cancel",
+        "qte_7c2e9a4b1d8f3e6a0c5b"
+      ],
+      "path": {
+        "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b"
+      },
+      "query": {}
+    },
+    {
+      "key": "POST /v2/quotes/{quote_id}/offers/{offer_id}/accept",
+      "cli": "vistalink quotes accept",
+      "argv": [
+        "quotes",
+        "accept",
+        "qte_7c2e9a4b1d8f3e6a0c5b",
+        "qof_4a9d2c7e1b8f5a3d6e0c",
+        "--idempotency-key",
+        "4f1c2b8e-booking-ada-rossi",
+        "--guest",
+        "{\"first_name\":\"Ada\",\"last_name\":\"Rossi\",\"email\":\"ada@example.com\"}"
+      ],
+      "path": {
+        "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
+        "offer_id": "qof_4a9d2c7e1b8f5a3d6e0c"
+      },
+      "query": {},
+      "body": {
+        "guest": {
+          "first_name": "Ada",
+          "last_name": "Rossi",
+          "email": "ada@example.com"
+        }
+      },
+      "idempotencyKey": "4f1c2b8e-booking-ada-rossi"
     },
     {
       "key": "GET /v2/jobs/{job_id}",

@@ -9,6 +9,7 @@ export type WebhookEventName =
   | "rates.batch.completed"
   | "rooms.reconcile.completed"
   | "booking.updated"
+  | "quote.updated"
   | (string & {});
 
 export interface WebhookEvent<T = Record<string, unknown>> {

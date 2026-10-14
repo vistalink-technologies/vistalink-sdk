@@ -19,6 +19,16 @@ describe("value parsing (docs grammar)", () => {
     expect(() => parseValue("{nope", "json", "stay", rf)).toThrow("--stay expects JSON");
   });
 
+  it("a bare word or an object (price_to_beat: auto | {total, currency})", () => {
+    expect(parseValue("auto", "string_or_json", "price-to-beat", rf)).toBe("auto");
+    expect(parseValue('{"total":"250.00","currency":"EUR"}', "string_or_json", "price-to-beat", rf)).toEqual({
+      total: "250.00",
+      currency: "EUR",
+    });
+    expect(parseValue("@body.json", "string_or_json", "price-to-beat", rf)).toEqual({ a: 1 });
+    expect(() => parseValue("{nope", "string_or_json", "price-to-beat", rf)).toThrow("--price-to-beat expects JSON");
+  });
+
   it("hotel references from bare arguments", () => {
     expect(hotelRef(H1)).toBe(H1);
     expect(hotelRef("https://www.booking.com/hotel/it/umilta-36.en-gb.html")).toEqual({ booking_url: "https://www.booking.com/hotel/it/umilta-36.en-gb.html" });

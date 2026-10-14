@@ -157,6 +157,27 @@ if (final.status === "failed") console.log(final.failure?.reason);   // e.g. pay
 submit). After that it answers 409 `conflict`. `webhooks.delete(id)` resolves
 to `undefined` (204).
 
+## Quotes (ask the hotel for a direct price)
+
+```ts
+const quote = await vl.quotes.create({
+  hotel_id: "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
+  stay: { check_in: "2026-11-27", check_out: "2026-11-30", rooms: [{ adults: 2, children_ages: [] }] },
+  wants: { refundable: true, room_type: "double" },
+});                                                   // VistaLink emails the hotel; Idempotency-Key generated
+const ready = await vl.quotes.wait(quote.quote_id, { timeoutMs: 6 * 3_600_000 }); // first offer, or closed
+if (ready.status === "offer_received") {
+  const offer = ready.offers[0];                      // total, board, free_cancellation, beats_by, evidence…
+  await vl.quotes.accept(quote.quote_id, offer.offer_id, {
+    guest: { first_name: "Ada", last_name: "Rossi", email: "ada@example.com" },
+  });                                                 // ONE intro email to the hotel, guest copied
+}
+```
+
+$0.25 per quote the hotel answers with a price; accept and cancel are free.
+Test keys get a simulated hotel within seconds (`sandbox_outcome`). For live
+keys, prefer the `quote.updated` webhook to a long `wait`.
+
 ## Errors
 
 ```ts

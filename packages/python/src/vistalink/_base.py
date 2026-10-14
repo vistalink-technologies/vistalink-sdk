@@ -18,6 +18,10 @@ DEFAULT_BASE_URL = "https://api.vistalink.com"
 JOB_TERMINAL = frozenset({"succeeded", "failed", "canceled"})
 #: Booking states that never change again.
 BOOKING_FINAL = frozenset({"confirmed", "failed", "expired", "canceled"})
+#: Quote states that never change again.
+QUOTE_FINAL = frozenset({"accepted", "completed", "no_response", "declined", "cancelled", "failed"})
+#: Where ``quotes.wait`` stops by default: the first offer, or the quote closing without one.
+QUOTE_STOP_DEFAULT = ("offer_received", "accepted", "completed", "no_response", "declined", "cancelled", "failed")
 BOOKING_STOP_DEFAULT = (
     "requires_payment",
     "requires_user_action",
@@ -201,6 +205,24 @@ def booking_get(booking_id: str) -> Spec:
 
 def booking_cancel(booking_id: str) -> Spec:
     return Spec("POST", f"/v2/bookings/{booking_id}/cancel", {200: model(m.Booking)})
+
+
+def quote_create(body: Body, idempotency_key: str | None) -> Spec:
+    return Spec("POST", "/v2/quotes", {202: model(m.Quote), 200: model(m.Quote)}, json=dump(body),
+                idempotency_key=_idem(idempotency_key))
+
+
+def quote_get(quote_id: str) -> Spec:
+    return Spec("GET", f"/v2/quotes/{quote_id}", {200: model(m.Quote)})
+
+
+def quote_cancel(quote_id: str) -> Spec:
+    return Spec("POST", f"/v2/quotes/{quote_id}/cancel", {200: model(m.Quote)})
+
+
+def quote_accept(quote_id: str, offer_id: str, body: Body, idempotency_key: str | None) -> Spec:
+    return Spec("POST", f"/v2/quotes/{quote_id}/offers/{offer_id}/accept", {200: model(m.Quote)}, json=dump(body),
+                idempotency_key=_idem(idempotency_key))
 
 
 def job_get(job_id: str) -> Spec:

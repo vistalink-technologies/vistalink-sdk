@@ -11,6 +11,13 @@ def job(status, **extra):
             "updated_at": "2026-10-07T12:00:01Z", "progress": {"done": 0, "total": 1}, **extra}
 
 
+def quote(status, **extra):
+    return {"quote_id": "qte_1", "status": status, "hotel_id": "h1",
+            "stay": {"check_in": "2026-11-27", "check_out": "2026-11-30", "rooms": [{"adults": 2, "children_ages": []}]},
+            "deadline_at": "2026-10-15T21:33:00Z", "next_step": "x", "created_at": "2026-10-13T21:33:00Z",
+            "updated_at": "2026-10-13T21:33:00Z", "offers": [], **extra}
+
+
 def booking(status, **extra):
     return {"booking_id": "bk_1", "status": status, "hotel_id": "h1", **extra}
 
