@@ -161,3 +161,14 @@ describe("login, keys, openapi", () => {
     expect(maskKey("vl_live_short")).toBe("vl_live_*****");
   });
 });
+
+describe("help", () => {
+  it("every command group has a real description, not its own name (2026-10-14: `quotes — quotes`)", async () => {
+    const h = harness([], { withKey: false });
+    await h.run(["--help"]);
+    const text = h.out + h.err;
+    const groups = [...text.matchAll(/^\s{2}([a-z]+)\s{2,}(.+)$/gm)].map((m) => [m[1], m[2].trim()]);
+    expect(groups.length).toBeGreaterThan(8);
+    for (const [name, desc] of groups) expect(desc, name).not.toBe(name);
+  });
+});

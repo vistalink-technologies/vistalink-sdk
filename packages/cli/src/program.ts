@@ -250,6 +250,8 @@ export function buildProgram(deps: Deps): Command {
     webhooks: "webhook endpoints and deliveries",
     chat: "conversational search",
     catalog: "amenity codes, booking engines, health, the OpenAPI document",
+    quotes: "ask a hotel by email for a direct price: create, get, cancel, accept an offer",
+    credentials: "register a payment credential for a card-entry booking",
   };
 
   // Generic commands, one per operation, with per-operation extensions.
