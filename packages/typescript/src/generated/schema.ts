@@ -95,7 +95,7 @@ export interface paths {
         put?: never;
         /**
          * Rates for many hotels and stays
-         * @description Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher. Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when the batch has 1,000 hotels or more. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.
+         * @description Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher (a Free plan's test key may try `freshness: cached` with up to 25 hotels and 1 stay). Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when the batch has 1,000 hotels or more. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.
          */
         post: operations["batchRates"];
         delete?: never;
@@ -115,7 +115,7 @@ export interface paths {
         put?: never;
         /**
          * Reconcile room types across sources
-         * @description Needs the `reconcile` scope and the Build plan or higher. Answers 200 with the result when every source is `kind: rooms` and the hotel is known, otherwise 202 with a `rooms.reconcile` job. Billed once per request, `rooms.reconcile.urls` when any source is a URL and `rooms.reconcile.supplied` otherwise; an identical request within 30 days returns the stored result at amount `"0"`. Honours `Idempotency-Key`.
+         * @description Needs the `reconcile` scope and the Build plan or higher (a Free plan's test key may try it with up to 2 sources). Answers 200 with the result when every source is `kind: rooms` and the hotel is known, otherwise 202 with a `rooms.reconcile` job. Billed once per request, `rooms.reconcile.urls` when any source is a URL and `rooms.reconcile.supplied` otherwise; an identical request within 30 days returns the stored result at amount `"0"`. Honours `Idempotency-Key`.
          */
         post: operations["reconcileRooms"];
         delete?: never;
@@ -135,7 +135,7 @@ export interface paths {
         put?: never;
         /**
          * Create a booking
-         * @description Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`; bookings are free and `billing` is always null. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page). `card_entry` is rolling out and answers 403 `not_yet_available` in production: it needs `payment_method` and `mandate`, answers `requires_credential`, and nothing touches the hotel until `POST /v2/bookings/{booking_id}/confirm`.
+         * @description Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope and an `Idempotency-Key`; bookings are free and `billing` is always null. Live booking is in early access (request it from sales@vistalink.com; until then live keys answer 403 `not_yet_available`) and then needs the Build plan. Any `vl_test_` key, Free included, gets the full booking sandbox: it simulates every outcome and never contacts a hotel or charges a card. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page). `card_entry` answers 403 `not_yet_available` for a live key until it is enabled for the account (test keys run it in the sandbox): it needs `payment_method` and `mandate`, answers `requires_credential`, and nothing touches the hotel until `POST /v2/bookings/{booking_id}/confirm`.
          */
         post: operations["createBooking"];
         delete?: never;
@@ -155,7 +155,7 @@ export interface paths {
         put?: never;
         /**
          * Confirm a card-entry booking
-         * @description Rolling out; answers 403 not_yet_available in production. `card_entry` only: attaches the credential (or uses the one bound at create) and starts the booking on the hotel's own checkout, where the card is typed and the hotel charges it as merchant of record. Answers 202 with the Booking in `queued`; follow it with GET /v2/bookings/{booking_id} or `booking.updated`. Accepted only in `requires_credential` and only once: any other status, including `submitted` and `unknown`, is 409 `booking_not_confirmable`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`. Test keys get a simulated outcome chosen by the credential's test token.
+         * @description Answers 403 not_yet_available for a live key until card entry is enabled for the account (test keys run it in the sandbox). `card_entry` only: attaches the credential (or uses the one bound at create) and starts the booking on the hotel's own checkout, where the card is typed and the hotel charges it as merchant of record. Answers 202 with the Booking in `queued`; follow it with GET /v2/bookings/{booking_id} or `booking.updated`. Accepted only in `requires_credential` and only once: any other status, including `submitted` and `unknown`, is 409 `booking_not_confirmable`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`. Test keys get a simulated outcome chosen by the credential's test token.
          */
         post: operations["confirmBooking"];
         delete?: never;
@@ -175,7 +175,7 @@ export interface paths {
         put?: never;
         /**
          * Register a payment credential
-         * @description Rolling out; answers 403 not_yet_available in production. Turns a Basis Theory card token you created with VistaLink's public key into a one-booking `cred_` credential for `payment.mode card_entry`. The card number never reaches VistaLink: we read the token masked and keep only brand, last four and expiry. A credential lasts 30 minutes (or less, with the token), pays for one booking, and its vault token is deleted once that booking is submitted or ends. Needs the `booking` scope and the Build plan or higher; `Idempotency-Key` is optional.
+         * @description Answers 403 not_yet_available for a live key until card entry is enabled for the account (test keys run it in the sandbox). Turns a Basis Theory card token you created with VistaLink's public key into a one-booking `cred_` credential for `payment.mode card_entry`. The card number never reaches VistaLink: we read the token masked and keep only brand, last four and expiry. A credential lasts 30 minutes (or less, with the token), pays for one booking, and its vault token is deleted once that booking is submitted or ends. Needs the `booking` scope and the Build plan or higher; `Idempotency-Key` is optional.
          */
         post: operations["createPaymentCredential"];
         delete?: never;
@@ -235,7 +235,7 @@ export interface paths {
         put?: never;
         /**
          * Request a quote from a hotel
-         * @description Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone: a simulated hotel answers within seconds, as `sandbox_outcome` says.
+         * @description Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone and cost nothing, on every plan, Free included: a simulated hotel answers within seconds, as `sandbox_outcome` says.
          */
         post: operations["createQuote"];
         delete?: never;
@@ -295,7 +295,7 @@ export interface paths {
         put?: never;
         /**
          * Accept a quote offer
-         * @description Free; needs the `quotes` scope and the Build plan or higher. Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).
+         * @description Free; needs the `quotes` scope and the Build plan or higher (test keys: any plan). Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).
          */
         post: operations["acceptQuoteOffer"];
         delete?: never;
@@ -3385,7 +3385,7 @@ export interface components {
         Payment: {
             /**
              * Mode
-             * @description `checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (rolling out; answers 403 `not_yet_available` in production) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record.
+             * @description `checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (403 `not_yet_available` for a live key until enabled for the account; test keys run it in the sandbox) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record.
              * @enum {string}
              */
             mode: "checkout" | "handoff" | "external" | "card_entry";
@@ -4159,6 +4159,11 @@ export interface components {
              */
             status: "observed" | "stale" | "unknown" | "unsupported" | "unresolved";
             /**
+             * Reason
+             * @description Why the input did not resolve, present only when `unresolved`; the `reason` `POST /v2/hotels/resolve` gives, for example `invalid_hotel_id` (neither a uuid nor a URL), `not_found`, or `not_indexed` (the listing exists but the hotel is not indexed yet).
+             */
+            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed") | null;
+            /**
              * Channel
              * @description The channel read, as requested.
              */
@@ -4232,7 +4237,7 @@ export interface components {
         RatesBatchRequest: {
             /**
              * Hotels
-             * @description Up to 10,000 hotels, each a `hotel_id` or an inline identifier.
+             * @description Up to 10,000 hotels, each a `hotel_id`, an inline identifier, or a listing or website URL as a string (the scheme is optional).
              */
             hotels: (string | components["schemas"]["HotelIdentifier"])[];
             /**
@@ -4257,7 +4262,7 @@ export interface components {
             /**
              * Max Age Hours
              * @description Oldest stored price to accept on `cached`, in hours; values above 168 are treated as 168.
-             * @default 24
+             * @default 168
              */
             max_age_hours?: number;
             /**
@@ -4295,7 +4300,7 @@ export interface components {
         RatesRequest: {
             /**
              * Hotels
-             * @description Up to 100 hotels, each a `hotel_id` or an inline identifier resolved as `POST /v2/hotels/resolve` would; a hotel listed twice is billed once.
+             * @description Up to 100 hotels, each a `hotel_id`, an inline identifier resolved as `POST /v2/hotels/resolve` would, or a listing or website URL as a string (the scheme is optional); a hotel listed twice is billed once.
              */
             hotels: (string | components["schemas"]["HotelIdentifier"])[];
             /** @description The stay to price. */
@@ -4317,7 +4322,7 @@ export interface components {
             /**
              * Max Age Hours
              * @description Oldest stored price to accept on `cached`, in hours; values above 168 (7 days) are treated as 168.
-             * @default 24
+             * @default 168
              */
             max_age_hours?: number;
             /**
@@ -6404,7 +6409,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6518,7 +6523,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6536,7 +6541,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6614,7 +6619,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6698,7 +6703,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6716,7 +6721,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6791,7 +6796,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6809,7 +6814,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6893,7 +6898,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6920,7 +6925,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6995,7 +7000,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7022,7 +7027,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7094,7 +7099,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7121,7 +7126,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7187,7 +7192,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7205,7 +7210,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7285,7 +7290,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7374,7 +7379,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7460,7 +7465,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7469,7 +7474,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7549,7 +7554,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7638,7 +7643,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7715,7 +7720,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher) */
+            /** @description forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7742,7 +7747,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7822,7 +7827,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7903,7 +7908,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7980,7 +7985,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8069,7 +8074,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8134,7 +8139,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8212,7 +8217,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8290,7 +8295,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8378,7 +8383,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8456,7 +8461,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8521,7 +8526,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8586,7 +8591,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
             429: {
                 headers: {
                     [name: string]: unknown;

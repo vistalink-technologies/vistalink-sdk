@@ -229,7 +229,7 @@ export const OPERATIONS: Operation[] = [
         "name": "hotels",
         "kind": "list_or_json",
         "required": true,
-        "description": "Up to 100 hotels, each a `hotel_id` or an inline identifier resolved as `POST /v2/hotels/resolve` would; a hotel listed "
+        "description": "Up to 100 hotels, each a `hotel_id`, an inline identifier resolved as `POST /v2/hotels/resolve` would, or a listing or w"
       },
       {
         "name": "stay",
@@ -281,7 +281,7 @@ export const OPERATIONS: Operation[] = [
         "name": "hotels",
         "kind": "list_or_json",
         "required": true,
-        "description": "Up to 10,000 hotels, each a `hotel_id` or an inline identifier."
+        "description": "Up to 10,000 hotels, each a `hotel_id`, an inline identifier, or a listing or website URL as a string (the scheme is opt"
       },
       {
         "name": "stays",
