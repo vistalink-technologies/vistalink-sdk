@@ -2900,6 +2900,13 @@ export interface components {
              * @description Explanation in English.
              */
             message: string;
+            /**
+             * Details
+             * @description Structured reason and limits, when the underlying error supplies them.
+             */
+            details?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * JobList

@@ -7018,6 +7018,19 @@
             "type": "string",
             "title": "Message",
             "description": "Explanation in English."
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Structured reason and limits, when the underlying error supplies them."
           }
         },
         "type": "object",

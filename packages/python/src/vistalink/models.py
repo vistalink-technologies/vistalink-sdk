@@ -1429,6 +1429,13 @@ class JobError(BaseModel):
     message: Annotated[
         str, Field(description="Explanation in English.", title="Message")
     ]
+    details: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description="Structured reason and limits, when the underlying error supplies them.",
+            title="Details",
+        ),
+    ] = None
 
 
 class JobProgress(BaseModel):
