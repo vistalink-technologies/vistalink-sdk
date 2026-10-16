@@ -5832,7 +5832,7 @@ export interface components {
         Warning_: {
             /**
              * Code
-             * @description Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), and on rates `currency_unavailable`.
+             * @description Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), on rates `currency_unavailable`, and on search `daily_hotel_cap` (results over the team's daily limit of different hotels were withheld).
              */
             code: string;
             /**

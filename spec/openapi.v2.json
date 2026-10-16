@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "VistaLink API",
-    "description": "VistaLink hotel API v2. Authenticate with `Authorization: Bearer vl_live_…` (or `vl_test_…`). Money is a decimal string with a sibling ISO 4217 `currency`. Every response carries `request_id` and `billing` (null when free); errors are `{error: {code, message, request_id, details?}}`. Rate-limit headers `X-RateLimit-Limit/Remaining/Reset`, credit header `X-Credit-Remaining` (USD).",
+    "description": "VistaLink hotel API v2. Authenticate with `Authorization: Bearer vl_live_…` (or `vl_test_…`). Money is a decimal string with a sibling ISO 4217 `currency`. Every response carries `request_id` and `billing` (null when free); errors are `{error: {code, message, request_id, details?}}`. Rate-limit headers `X-RateLimit-Limit/Remaining/Reset`, credit header `X-Credit-Remaining` (USD). Calls that return hotel data also carry the daily distinct-hotel allowance, `X-Hotel-Quota-Limit/Remaining/Reset` (absent on plans without one).",
     "version": "2.1.0",
     "summary": "Hotel resolution, search, content, rates, room reconciliation, booking and email quotes.",
     "contact": {
@@ -12212,7 +12212,7 @@
           "code": {
             "type": "string",
             "title": "Code",
-            "description": "Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with \"a rate on request\"), and on rates `currency_unavailable`."
+            "description": "Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with \"a rate on request\"), on rates `currency_unavailable`, and on search `daily_hotel_cap` (results over the team's daily limit of different hotels were withheld)."
           },
           "message": {
             "anyOf": [
