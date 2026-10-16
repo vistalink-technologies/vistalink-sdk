@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "VistaLink API",
-    "description": "VistaLink hotel API v2. Authenticate with `Authorization: Bearer vl_live_…` (or `vl_test_…`). Money is a decimal string with a sibling ISO 4217 `currency`. Every response carries `request_id` and `billing` (null when free); errors are `{error: {code, message, request_id, details?}}`. Rate-limit headers `X-RateLimit-Limit/Remaining/Reset`, credit header `X-Credit-Remaining` (USD).",
+    "description": "VistaLink hotel API v2. Authenticate with `Authorization: Bearer vl_live_…` (or `vl_test_…`). Money is a decimal string with a sibling ISO 4217 `currency`. Every response carries `request_id` and `billing` (null when free); errors are `{error: {code, message, request_id, details?}}`. Rate-limit headers `X-RateLimit-Limit/Remaining/Reset`, credit header `X-Credit-Remaining` (USD). Calls that return hotel data also carry the daily distinct-hotel allowance, `X-Hotel-Quota-Limit/Remaining/Reset` (absent on plans without one).",
     "version": "2.1.0",
     "summary": "Hotel resolution, search, content, rates, room reconciliation, booking and email quotes.",
     "contact": {
@@ -77,7 +77,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -357,7 +357,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -367,7 +367,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -477,7 +477,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -570,7 +570,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -580,7 +580,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -663,7 +663,7 @@
           "Rates"
         ],
         "summary": "Rates for many hotels and stays",
-        "description": "Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher. Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when the batch has 1,000 hotels or more. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.",
+        "description": "Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher (a Free plan's test key may try `freshness: cached` with up to 25 hotels and 1 stay). Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when the batch has 1,000 hotels or more. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.",
         "operationId": "batchRates",
         "requestBody": {
           "content": {
@@ -707,7 +707,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -717,7 +717,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -787,7 +787,7 @@
           "Rooms"
         ],
         "summary": "Reconcile room types across sources",
-        "description": "Needs the `reconcile` scope and the Build plan or higher. Answers 200 with the result when every source is `kind: rooms` and the hotel is known, otherwise 202 with a `rooms.reconcile` job. Billed once per request, `rooms.reconcile.urls` when any source is a URL and `rooms.reconcile.supplied` otherwise; an identical request within 30 days returns the stored result at amount `\"0\"`. Honours `Idempotency-Key`.",
+        "description": "Needs the `reconcile` scope and the Build plan or higher (a Free plan's test key may try it with up to 2 sources). Answers 200 with the result when every source is `kind: rooms` and the hotel is known, otherwise 202 with a `rooms.reconcile` job. Billed once per request, `rooms.reconcile.urls` when any source is a URL and `rooms.reconcile.supplied` otherwise; an identical request within 30 days returns the stored result at amount `\"0\"`. Honours `Idempotency-Key`.",
         "operationId": "reconcileRooms",
         "requestBody": {
           "content": {
@@ -831,7 +831,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -841,7 +841,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -944,7 +944,7 @@
           "Bookings"
         ],
         "summary": "Create a booking",
-        "description": "Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`; bookings are free and `billing` is always null. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page). `card_entry` is rolling out and answers 403 `not_yet_available` in production: it needs `payment_method` and `mandate`, answers `requires_credential`, and nothing touches the hotel until `POST /v2/bookings/{booking_id}/confirm`.",
+        "description": "Answers 202 with the Booking, which then moves on its own: poll GET /v2/bookings/{booking_id} or subscribe to `booking.updated`. Needs the `booking` scope and an `Idempotency-Key`; bookings are free and `billing` is always null. Live booking is in early access (request it from sales@vistalink.com; until then live keys answer 403 `not_yet_available`) and then needs the Build plan. Any `vl_test_` key, Free included, gets the full booking sandbox: it simulates every outcome and never contacts a hotel or charges a card. Payment `mode` is `checkout` (a hosted checkout link in `payment.checkout_url`, where the guest pays the property directly), `handoff` (a hosted session for the guest) or `external` (the booking engine's own prefilled page). `card_entry` answers 403 `not_yet_available` for a live key until it is enabled for the account (test keys run it in the sandbox): it needs `payment_method` and `mandate`, answers `requires_credential`, and nothing touches the hotel until `POST /v2/bookings/{booking_id}/confirm`.",
         "operationId": "createBooking",
         "requestBody": {
           "content": {
@@ -988,7 +988,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -998,7 +998,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1066,7 +1066,7 @@
           "Bookings"
         ],
         "summary": "Confirm a card-entry booking",
-        "description": "Rolling out; answers 403 not_yet_available in production. `card_entry` only: attaches the credential (or uses the one bound at create) and starts the booking on the hotel's own checkout, where the card is typed and the hotel charges it as merchant of record. Answers 202 with the Booking in `queued`; follow it with GET /v2/bookings/{booking_id} or `booking.updated`. Accepted only in `requires_credential` and only once: any other status, including `submitted` and `unknown`, is 409 `booking_not_confirmable`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`. Test keys get a simulated outcome chosen by the credential's test token.",
+        "description": "Answers 403 not_yet_available for a live key until card entry is enabled for the account (test keys run it in the sandbox). `card_entry` only: attaches the credential (or uses the one bound at create) and starts the booking on the hotel's own checkout, where the card is typed and the hotel charges it as merchant of record. Answers 202 with the Booking in `queued`; follow it with GET /v2/bookings/{booking_id} or `booking.updated`. Accepted only in `requires_credential` and only once: any other status, including `submitted` and `unknown`, is 409 `booking_not_confirmable`. Needs the `booking` scope, the Build plan or higher and an `Idempotency-Key`. Test keys get a simulated outcome chosen by the credential's test token.",
         "operationId": "confirmBooking",
         "parameters": [
           {
@@ -1135,7 +1135,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1145,7 +1145,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1196,7 +1196,7 @@
           "Bookings"
         ],
         "summary": "Register a payment credential",
-        "description": "Rolling out; answers 403 not_yet_available in production. Turns a Basis Theory card token you created with VistaLink's public key into a one-booking `cred_` credential for `payment.mode card_entry`. The card number never reaches VistaLink: we read the token masked and keep only brand, last four and expiry. A credential lasts 30 minutes (or less, with the token), pays for one booking, and its vault token is deleted once that booking is submitted or ends. Needs the `booking` scope and the Build plan or higher; `Idempotency-Key` is optional.",
+        "description": "Answers 403 not_yet_available for a live key until card entry is enabled for the account (test keys run it in the sandbox). Turns a Basis Theory card token you created with VistaLink's public key into a one-booking `cred_` credential for `payment.mode card_entry`. The card number never reaches VistaLink: we read the token masked and keep only brand, last four and expiry. A credential lasts 30 minutes (or less, with the token), pays for one booking, and its vault token is deleted once that booking is submitted or ends. Needs the `booking` scope and the Build plan or higher; `Idempotency-Key` is optional.",
         "operationId": "createPaymentCredential",
         "requestBody": {
           "content": {
@@ -1240,7 +1240,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1250,7 +1250,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1362,7 +1362,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1461,7 +1461,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1512,7 +1512,7 @@
           "Quotes"
         ],
         "summary": "Request a quote from a hotel",
-        "description": "Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone: a simulated hotel answers within seconds, as `sandbox_outcome` says.",
+        "description": "Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone and cost nothing, on every plan, Free included: a simulated hotel answers within seconds, as `sandbox_outcome` says.",
         "operationId": "createQuote",
         "requestBody": {
           "content": {
@@ -1556,7 +1556,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1566,7 +1566,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1703,7 +1703,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1802,7 +1802,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1853,7 +1853,7 @@
           "Quotes"
         ],
         "summary": "Accept a quote offer",
-        "description": "Free; needs the `quotes` scope and the Build plan or higher. Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).",
+        "description": "Free; needs the `quotes` scope and the Build plan or higher (test keys: any plan). Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).",
         "operationId": "acceptQuoteOffer",
         "parameters": [
           {
@@ -1934,7 +1934,7 @@
             }
           },
           "403": {
-            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher)",
+            "description": "forbidden (missing scope, or details.reason tier_required: this needs the Build plan or higher; on Free, details.free_trial says what a test key may try)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1944,7 +1944,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2053,7 +2053,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2150,7 +2150,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2299,7 +2299,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2387,7 +2387,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2481,7 +2481,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2563,7 +2563,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2654,7 +2654,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2785,7 +2785,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2879,7 +2879,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2968,7 +2968,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3042,7 +3042,7 @@
             }
           },
           "429": {
-            "description": "rate_limited",
+            "description": "rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: \"daily_hotel_cap\"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7018,6 +7018,19 @@
             "type": "string",
             "title": "Message",
             "description": "Explanation in English."
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Structured reason and limits, when the underlying error supplies them."
           }
         },
         "type": "object",
@@ -7860,7 +7873,7 @@
               "card_entry"
             ],
             "title": "Mode",
-            "description": "`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (rolling out; answers 403 `not_yet_available` in production) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record."
+            "description": "`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (403 `not_yet_available` for a live key until enabled for the account; test keys run it in the sandbox) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record."
           },
           "return_url": {
             "anyOf": [
@@ -9195,6 +9208,28 @@
             "title": "Status",
             "description": "`observed` (recent prices), `stale` (older but within `max_age_hours`), `unknown` (no prices for this stay), `unsupported` (no readable booking engine, or the channel is not enabled) or `unresolved` (the input did not resolve to an indexed hotel)."
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_found",
+                  "ambiguous_website",
+                  "unparseable_booking_url",
+                  "unparseable_website_url",
+                  "unparseable_expedia_url",
+                  "invalid_hotel_id",
+                  "expedia_not_ingested",
+                  "not_indexed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why the input did not resolve, present only when `unresolved`; the `reason` `POST /v2/hotels/resolve` gives, for example `invalid_hotel_id` (neither a uuid nor a URL), `not_found`, or `not_indexed` (the listing exists but the hotel is not indexed yet)."
+          },
           "channel": {
             "anyOf": [
               {
@@ -9322,7 +9357,7 @@
             "maxItems": 10000,
             "minItems": 1,
             "title": "Hotels",
-            "description": "Up to 10,000 hotels, each a `hotel_id` or an inline identifier."
+            "description": "Up to 10,000 hotels, each a `hotel_id`, an inline identifier, or a listing or website URL as a string (the scheme is optional)."
           },
           "stays": {
             "items": {
@@ -9360,7 +9395,7 @@
             "minimum": 1.0,
             "title": "Max Age Hours",
             "description": "Oldest stored price to accept on `cached`, in hours; values above 168 are treated as 168.",
-            "default": 24
+            "default": 168
           },
           "currency": {
             "anyOf": [
@@ -9424,7 +9459,7 @@
             "maxItems": 100,
             "minItems": 1,
             "title": "Hotels",
-            "description": "Up to 100 hotels, each a `hotel_id` or an inline identifier resolved as `POST /v2/hotels/resolve` would; a hotel listed twice is billed once."
+            "description": "Up to 100 hotels, each a `hotel_id`, an inline identifier resolved as `POST /v2/hotels/resolve` would, or a listing or website URL as a string (the scheme is optional); a hotel listed twice is billed once."
           },
           "stay": {
             "$ref": "#/components/schemas/Stay",
@@ -9456,7 +9491,7 @@
             "minimum": 1.0,
             "title": "Max Age Hours",
             "description": "Oldest stored price to accept on `cached`, in hours; values above 168 (7 days) are treated as 168.",
-            "default": 24
+            "default": 168
           },
           "currency": {
             "anyOf": [
@@ -12177,7 +12212,7 @@
           "code": {
             "type": "string",
             "title": "Code",
-            "description": "Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with \"a rate on request\"), and on rates `currency_unavailable`."
+            "description": "Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with \"a rate on request\"), on rates `currency_unavailable`, and on search `daily_hotel_cap` (results over the team's daily limit of different hotels were withheld)."
           },
           "message": {
             "anyOf": [

@@ -1429,6 +1429,13 @@ class JobError(BaseModel):
     message: Annotated[
         str, Field(description="Explanation in English.", title="Message")
     ]
+    details: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description="Structured reason and limits, when the underlying error supplies them.",
+            title="Details",
+        ),
+    ] = None
 
 
 class JobProgress(BaseModel):
@@ -1906,7 +1913,7 @@ class Payment(BaseModel):
     mode: Annotated[
         Literal["checkout", "handoff", "external", "card_entry"],
         Field(
-            description="`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (rolling out; answers 403 `not_yet_available` in production) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record.",
+            description="`checkout` returns a hosted checkout link for pay-now offers, `handoff` returns a hosted browser session in which the guest completes the booking, `external` returns the booking engine's own prefilled page. `card_entry` (403 `not_yet_available` for a live key until enabled for the account; test keys run it in the sandbox) types the guest's card into the hotel's own checkout from a one-booking credential: send `payment_method` and `mandate`, then call `POST /v2/bookings/{booking_id}/confirm`. The hotel stays merchant of record.",
             title="Mode",
         ),
     ]
@@ -3466,7 +3473,7 @@ class Warning(BaseModel):
     code: Annotated[
         str,
         Field(
-            description='Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), and on rates `currency_unavailable`.',
+            description='Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), on rates `currency_unavailable`, and on search `daily_hotel_cap` (results over the team\'s daily limit of different hotels were withheld).',
             title="Code",
         ),
     ]
@@ -4728,6 +4735,23 @@ class RateResult(BaseModel):
             title="Status",
         ),
     ]
+    reason: Annotated[
+        Literal[
+            "not_found",
+            "ambiguous_website",
+            "unparseable_booking_url",
+            "unparseable_website_url",
+            "unparseable_expedia_url",
+            "invalid_hotel_id",
+            "expedia_not_ingested",
+            "not_indexed",
+        ]
+        | None,
+        Field(
+            description="Why the input did not resolve, present only when `unresolved`; the `reason` `POST /v2/hotels/resolve` gives, for example `invalid_hotel_id` (neither a uuid nor a URL), `not_found`, or `not_indexed` (the listing exists but the hotel is not indexed yet).",
+            title="Reason",
+        ),
+    ] = None
     channel: Annotated[
         Literal["direct", "third_party"] | None,
         Field(description="The channel read, as requested.", title="Channel"),
@@ -4766,7 +4790,7 @@ class RatesBatchRequest(BaseModel):
     hotels: Annotated[
         list[str | HotelIdentifier],
         Field(
-            description="Up to 10,000 hotels, each a `hotel_id` or an inline identifier.",
+            description="Up to 10,000 hotels, each a `hotel_id`, an inline identifier, or a listing or website URL as a string (the scheme is optional).",
             max_length=10000,
             min_length=1,
             title="Hotels",
@@ -4803,7 +4827,7 @@ class RatesBatchRequest(BaseModel):
             le=720,
             title="Max Age Hours",
         ),
-    ] = 24
+    ] = 168
     currency: Annotated[
         str | None,
         Field(
@@ -4825,7 +4849,7 @@ class RatesRequest(BaseModel):
     hotels: Annotated[
         list[str | HotelIdentifier],
         Field(
-            description="Up to 100 hotels, each a `hotel_id` or an inline identifier resolved as `POST /v2/hotels/resolve` would; a hotel listed twice is billed once.",
+            description="Up to 100 hotels, each a `hotel_id`, an inline identifier resolved as `POST /v2/hotels/resolve` would, or a listing or website URL as a string (the scheme is optional); a hotel listed twice is billed once.",
             max_length=100,
             min_length=1,
             title="Hotels",
@@ -4854,7 +4878,7 @@ class RatesRequest(BaseModel):
             le=720,
             title="Max Age Hours",
         ),
-    ] = 24
+    ] = 168
     currency: Annotated[
         str | None,
         Field(
