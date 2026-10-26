@@ -14,10 +14,11 @@ concurrency:
 
 jobs:
   test:
-    # This public repository uses an organization self-hosted runner. Do not
-    # execute fork-controlled code on it.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, light]
+    # Standard hosted runners are free for public repositories and isolate SDK
+    # checks from the organization's private infrastructure. Keep this free-only
+    # path disabled if the repository's visibility changes.
+    if: github.event.repository.private == false && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
