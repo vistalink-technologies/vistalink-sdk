@@ -5,7 +5,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Mapping, TypeVar
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from pydantic import BaseModel
@@ -241,9 +241,22 @@ def job_result(job_id: str) -> Spec:
 def job_download(job: m.Job, base_url: str) -> Spec:
     """``result_url`` when it is a signed link elsewhere, else ``GET /v2/jobs/{id}/result``."""
     url = job.result_url
-    if not url or urlsplit(url)[:2] == urlsplit(base_url)[:2]:
+    if not url:
         return job_result(job.job_id)
-    return Spec("GET", url, {}, raw=True, anonymous=True)
+    resolved = urljoin(base_url.rstrip("/") + "/", url)
+    if _origin(resolved) == _origin(base_url):
+        return job_result(job.job_id)
+    return Spec("GET", resolved, {}, raw=True, anonymous=True,
+                headers={"Accept": "application/x-ndjson, application/json"})
+
+
+def _origin(url: str) -> tuple[str, str | None, int | None]:
+    parsed = urlsplit(url)
+    scheme = parsed.scheme.lower()
+    port = parsed.port
+    if port is None:
+        port = {"http": 80, "https": 443}.get(scheme)
+    return scheme, parsed.hostname, port
 
 
 def job_cancel(job_id: str) -> Spec:

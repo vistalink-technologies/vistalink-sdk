@@ -33,7 +33,8 @@ What the client does for you:
   every non-2xx (`code` is the API's `error.code`), plus client-side codes
   `network_error`, `timeout`, `job_failed`, `job_canceled`.
 - `jobs.wait()` / `bookings.wait()` polling, `jobs.download()` /
-  `jobs.waitForResult()` for `rates.batch` NDJSON (signed `result_url`, else
+  `jobs.waitForResult()` for buffered `rates.batch` NDJSON, plus
+  `jobs.downloadStream()` / `jobs.resultStream()` for raw byte streaming (signed `result_url`, else
   `GET /v2/jobs/{id}/result`), `bookingNextStep()`, `jobs.listAll()` /
   `search.pages()` cursor pagination, `webhooks.verify()`.
 - `vl.raw` is the typed openapi-fetch client for anything else.
@@ -119,7 +120,16 @@ const { ndjson } = await vl.jobs.waitForResult(job.job_id, { timeoutMs: 30 * 60_
 for (const row of parseNdjson(ndjson)) console.log(row.hotel_id, row.status);
 // jobs.download(job) alone: a signed result_url is fetched without the key;
 // when result_url is null it is GET /v2/jobs/{id}/result with the key (free).
+
+// Large results can be consumed without building one large string in memory.
+import { pipeline } from "node:stream/promises";
+const stream = await vl.jobs.downloadStream(job);
+await pipeline(stream, process.stdout); // Node applies backpressure and propagates output errors.
 ```
+
+`timeoutMs` bounds each fetch attempt through the response headers; it does not set a
+deadline for reading the stream body. Pass `{ signal }` to `downloadStream()` or
+`resultStream()` to cancel body consumption after the response begins.
 
 ## 5. Booking (the guest always pays the property)
 

@@ -27,7 +27,7 @@ export interface VistaLinkOptions {
   baseUrl?: string;
   /** Retries after the first attempt for 429/503 (and safe network errors). Default 3. */
   maxRetries?: number;
-  /** Per-attempt timeout in ms (0 = none). Default 60 000. */
+  /** Per-attempt time to response headers (0 = none); pass RequestOptions.signal to cancel stream reads. Default 60 000. */
   timeoutMs?: number;
   /** Custom fetch (tests, proxies). Receives a `Request`. */
   fetch?: (input: Request) => Promise<Response>;
@@ -147,6 +147,102 @@ function defaultIdempotencyKey(): string {
 
 type FetchResult<T> = { data?: T; error?: unknown; response: Response };
 
+async function readBodyPrefix(body: ReadableStream<Uint8Array>, maxBytes = 64 * 1024): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+  try {
+    while (bytesRead < maxBytes) {
+      const { value, done } = await reader.read();
+      if (done) return text + decoder.decode();
+      const remaining = maxBytes - bytesRead;
+      const prefix = value.subarray(0, remaining);
+      bytesRead += prefix.byteLength;
+      text += decoder.decode(prefix, { stream: true });
+      if (prefix.byteLength < value.byteLength || bytesRead === maxBytes) {
+        void reader.cancel().catch(() => {});
+        return text + decoder.decode();
+      }
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function abortableBody(body: ReadableStream<Uint8Array>, signal?: AbortSignal): ReadableStream<Uint8Array> {
+  if (!signal) return body;
+  const reader = body.getReader();
+  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let settled = false;
+  let aborting = false;
+  let released = false;
+  const cleanup = (): void => signal.removeEventListener("abort", onAbort);
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    try {
+      reader.releaseLock();
+    } catch {
+      // A pending read can only be released after it settles.
+    }
+  };
+  const abortReason = (): unknown => signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+  const onAbort = (): void => {
+    if (settled || aborting) return;
+    aborting = true;
+    settled = true;
+    cleanup();
+    const reason = abortReason();
+    try {
+      controller?.error(reason);
+    } catch {
+      // The consumer may have already canceled or errored the wrapper.
+    }
+    void reader.cancel(reason).catch(() => {}).finally(release);
+  };
+
+  return new ReadableStream<Uint8Array>({
+    start(streamController) {
+      controller = streamController;
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    },
+    async pull(streamController) {
+      if (aborting || settled) return;
+      try {
+        const { value, done } = await reader.read();
+        if (settled || aborting) return;
+        if (done) {
+          settled = true;
+          cleanup();
+          streamController.close();
+          release();
+        } else {
+          streamController.enqueue(value);
+        }
+      } catch (error) {
+        if (settled || aborting) return;
+        settled = true;
+        cleanup();
+        streamController.error(error);
+        release();
+      }
+    },
+    async cancel(reason) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        await reader.cancel(reason);
+      } finally {
+        release();
+      }
+    },
+  });
+}
+
 /**
  * VistaLink API v2 client.
  *
@@ -160,6 +256,8 @@ export class VistaLink {
   readonly raw: Client<paths>;
   readonly baseUrl: string;
   readonly openapiUrl: string;
+  /** @internal Default headers used only to construct authenticated requests. */
+  readonly #headers: Record<string, string>;
   private readonly sleep: Sleep;
   private readonly newKey: () => string;
   /** @internal the retrying fetch, without the client's default headers (signed result downloads). */
@@ -193,6 +291,7 @@ export class VistaLink {
       ...opts.headers,
     };
     if (opts.apiKey) headers.Authorization = `Bearer ${opts.apiKey}`;
+    this.#headers = headers;
     this._fetch = retryingFetch(baseFetch, retry, this.sleep);
     this.raw = createClient<paths>({ baseUrl: this.baseUrl, headers, fetch: this._fetch });
     this.hotels = new HotelsResource(this);
@@ -205,6 +304,14 @@ export class VistaLink {
     this.webhooks = new WebhooksResource(this);
     this.chat = new ChatResource(this);
     this.catalog = new CatalogResource(this);
+  }
+
+  /** @internal Build stream headers without exposing defaults on the client object. */
+  _headersForResult(extraHeaders?: Record<string, string>): Headers {
+    const headers = new Headers(this.#headers);
+    headers.set("Accept", "application/x-ndjson, application/json");
+    for (const [name, value] of Object.entries(extraHeaders ?? {})) headers.set(name, value);
+    return headers;
   }
 
   /** @internal unwrap an openapi-fetch result or throw `VistaLinkError`. */
@@ -465,6 +572,15 @@ export class JobsResource extends Resource {
   }
 
   /**
+   * Stream the raw NDJSON bytes from `GET /v2/jobs/{id}/result`. The caller owns
+   * the stream and should consume it or cancel it when finished early.
+   */
+  resultStream(jobId: string, opts?: RequestOptions): Promise<ReadableStream<Uint8Array>> {
+    const url = `${this.vl.baseUrl}/v2/jobs/${encodeURIComponent(jobId)}/result`;
+    return this.fetchResultStream(url, opts, false);
+  }
+
+  /**
    * The NDJSON result of a succeeded job: from `result_url` when it is a signed
    * link elsewhere (fetched without the API key), otherwise from
    * `GET /v2/jobs/{id}/result` (also when `result_url` is null).
@@ -479,6 +595,68 @@ export class JobsResource extends Resource {
       throw new VistaLinkError({ code: "upstream_error", message: `Downloading result_url failed (HTTP ${res.status})`, status: res.status });
     }
     return res.text();
+  }
+
+  /**
+   * Stream a finished job's raw NDJSON bytes. Same-origin results use the
+   * authenticated API route; signed external URLs are fetched anonymously.
+   * No API or caller headers are sent to a signed URL, including across its
+   * redirects. The caller owns the returned stream.
+   */
+  downloadStream(job: Pick<Job, "job_id" | "result_url">, opts?: RequestOptions): Promise<ReadableStream<Uint8Array>> {
+    const url = job.result_url;
+    if (!url || new URL(url, this.vl.baseUrl).origin === new URL(this.vl.baseUrl).origin) {
+      return this.resultStream(job.job_id, opts);
+    }
+    return this.fetchResultStream(new URL(url, this.vl.baseUrl).toString(), opts, true);
+  }
+
+  private async fetchResultStream(
+    url: string,
+    opts: RequestOptions | undefined,
+    anonymous: boolean,
+  ): Promise<ReadableStream<Uint8Array>> {
+    const headers = anonymous
+      ? new Headers({ Accept: "application/x-ndjson, application/json" })
+      : this.vl._headersForResult(opts?.headers);
+    const response = await this.vl._fetch(new Request(url, {
+      method: "GET",
+      signal: opts?.signal,
+      headers,
+      credentials: "omit",
+      // Authenticated API requests must never forward credentials to a redirect.
+      // Signed URLs are already anonymous, so following a storage redirect is safe.
+      redirect: anonymous ? "follow" : "error",
+    }));
+    if (!response.ok) {
+      if (anonymous) {
+        await response.body?.cancel().catch(() => {});
+        throw new VistaLinkError({
+          code: "upstream_error",
+          message: `Downloading result_url failed (HTTP ${response.status})`,
+          status: response.status,
+        });
+      }
+      const text = response.body
+        ? await readBodyPrefix(abortableBody(response.body, opts?.signal))
+        : "";
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : undefined;
+      } catch {
+        // Keep the response text for the standard error mapper.
+      }
+      throw VistaLinkError.fromResponse(response.status, body, response.headers);
+    }
+    if (!response.body) {
+      throw new VistaLinkError({
+        code: "invalid_response",
+        message: `Empty response body (HTTP ${response.status})`,
+        status: response.status,
+        requestId: response.headers.get("x-request-id"),
+      });
+    }
+    return abortableBody(response.body, opts?.signal);
   }
 
   /** `wait` then `download`: the NDJSON of a `rates.batch` job once it succeeds. */

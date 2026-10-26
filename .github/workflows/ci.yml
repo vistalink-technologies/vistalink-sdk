@@ -1,0 +1,55 @@
+name: SDK checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-checks-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    # This public repository uses an organization self-hosted runner. Do not
+    # execute fork-controlled code on it.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, light]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: 20
+            python: "3.10"
+          - node: 22
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache-dependency-glob: packages/python/uv.lock
+      - name: Test, typecheck, and build JavaScript packages
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm typecheck
+          pnpm build
+      - name: Test Python SDK
+        working-directory: packages/python
+        run: |
+          uv sync --python "${{ matrix.python }}" --frozen --extra dev
+          uv run --frozen python scripts/make_async.py
+          git diff --exit-code -- src/vistalink/_async_client.py
+          uv run --frozen python -m pytest
