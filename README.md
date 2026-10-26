@@ -58,8 +58,9 @@ PyPI `vistalink` were reserved at 0.0.1; the unscoped npm `vistalink` still
   exponential backoff.
 - Errors come back as `VistaLinkError{code, message, requestId, status,
   details}`. `code` is the API's `error.code`.
-- `jobs.wait` / `bookings.wait` / `quotes.wait` polling, `jobs.download` for `rates.batch`
-  NDJSON (signed `result_url`, or `GET /v2/jobs/{id}/result` when it is null),
+- `jobs.wait` / `bookings.wait` / `quotes.wait` polling, `jobs.download` for buffered `rates.batch`
+  NDJSON and `jobs.downloadStream` / `jobs.download_stream` for streaming it
+  (signed `result_url`, or `GET /v2/jobs/{id}/result` when it is null),
   a booking next-step helper for the three payment modes (`checkout`,
   `handoff`, `external`), `cursor` / `next_cursor` pagination helpers, and
   `webhooks.verify` (HMAC-SHA256 over `"<t>.<body>"` with a

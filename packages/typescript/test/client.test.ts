@@ -32,6 +32,19 @@ describe("auth", () => {
     expect(m.calls[0].headers.has("authorization")).toBe(false);
   });
 
+  it("does not serialize API keys or private default headers on the client", () => {
+    const vl = new VistaLink({
+      apiKey: "vl_test_serialization_secret",
+      baseUrl: "https://api.test",
+      headers: { "X-Private": "custom-header-secret" },
+    });
+    // Skip resource backreferences so JSON.stringify can inspect the client and raw client.
+    const serialized = JSON.stringify(vl, (key, value) => key === "vl" ? undefined : value);
+    expect(serialized).not.toContain("vl_test_serialization_secret");
+    expect(serialized).not.toContain("custom-header-secret");
+    expect(serialized).not.toContain("X-Private");
+  });
+
   it("builds path and query params", async () => {
     const { vl, calls } = make([{ status: 200, body: { request_id: "r", hotel_id: "h1" } }]);
     await vl.hotels.get("h1", { sections: "core,rooms", check_in: "2026-11-14", check_out: "2026-11-16", search_id: "srch_1" });
@@ -270,6 +283,212 @@ describe("job results", () => {
     await vl.jobs.download({ job_id: "job_1", result_url: "https://api.test/v2/jobs/job_1/result" });
     expect(calls[0].url).toBe("https://api.test/v2/jobs/job_1/result");
     expect(calls[0].headers.get("authorization")).toBe("Bearer vl_test_abc");
+  });
+
+  it("streams the first API result chunk before the producer finishes and cancels upstream", async () => {
+    let release!: () => void;
+    let finished = false;
+    let cancelled = false;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (pulls++ === 0) {
+          controller.enqueue(new TextEncoder().encode('{"hotel_id":"h1"}\n'));
+          return;
+        }
+        await gate;
+        finished = true;
+        controller.enqueue(new TextEncoder().encode('{"hotel_id":"h2"}\n'));
+        controller.close();
+      },
+      cancel() {
+        cancelled = true;
+        release();
+      },
+    });
+    const vl = new VistaLink({ apiKey: "vl_test_abc", baseUrl: "https://api.test", fetch: async () => new Response(body) });
+    const reader = (await vl.jobs.resultStream("job_1")).getReader();
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toBe('{"hotel_id":"h1"}\n');
+    expect(finished).toBe(false);
+    await reader.cancel();
+    expect(cancelled).toBe(true);
+  });
+
+  it("aborts a result stream after response headers and cancels the upstream body", async () => {
+    const abort = new AbortController();
+    const reason = new DOMException("stop after headers", "AbortError");
+    let canceled = false;
+    let calls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        return new Promise<void>(() => {});
+      },
+      cancel(cancelReason) {
+        canceled = true;
+        expect(cancelReason).toBe(reason);
+      },
+    }, { highWaterMark: 0 });
+    const vl = new VistaLink({
+      apiKey: "vl_test_abc",
+      baseUrl: "https://api.test",
+      maxRetries: 3,
+      fetch: async () => {
+        calls += 1;
+        return new Response(body);
+      },
+    });
+    const stream = await vl.jobs.resultStream("job_1", { signal: abort.signal });
+    const pendingRead = stream.getReader().read();
+    abort.abort(reason);
+
+    await expect(pendingRead).rejects.toBe(reason);
+    expect(canceled).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  it("cancels an already-aborted stream without retrying after a mocked response", async () => {
+    const abort = new AbortController();
+    const reason = new DOMException("already stopped", "AbortError");
+    abort.abort(reason);
+    let canceled = false;
+    let calls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      cancel(cancelReason) {
+        canceled = true;
+        expect(cancelReason).toBe(reason);
+      },
+    });
+    const vl = new VistaLink({
+      apiKey: "vl_test_abc",
+      baseUrl: "https://api.test",
+      maxRetries: 3,
+      // This mock deliberately returns headers despite the pre-aborted request.
+      fetch: async () => {
+        calls += 1;
+        return new Response(body);
+      },
+    });
+    const stream = await vl.jobs.resultStream("job_1", { signal: abort.signal });
+
+    await expect(stream.getReader().read()).rejects.toBe(reason);
+    expect(canceled).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  it("aborts authenticated error-body reads after headers and cancels upstream", async () => {
+    const abort = new AbortController();
+    const reason = new DOMException("stop error body", "AbortError");
+    let notifyBodyRead!: () => void;
+    const bodyReadStarted = new Promise<void>((resolve) => { notifyBodyRead = resolve; });
+    let canceled = false;
+    let calls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        notifyBodyRead();
+        return new Promise<void>(() => {});
+      },
+      cancel() {
+        canceled = true;
+      },
+    }, { highWaterMark: 0 });
+    const vl = new VistaLink({
+      apiKey: "vl_test_abc",
+      baseUrl: "https://api.test",
+      maxRetries: 3,
+      fetch: async () => {
+        calls += 1;
+        return new Response(body, { status: 403, headers: { "x-request-id": "req_slow_error" } });
+      },
+    });
+    const request = vl.jobs.resultStream("job_1", { signal: abort.signal });
+    await bodyReadStarted;
+    abort.abort(reason);
+
+    await expect(request).rejects.toBe(reason);
+    expect(canceled).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  it("bounds authenticated error-body reads and preserves the request ID", async () => {
+    let pulls = 0;
+    let canceled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new TextEncoder().encode("x".repeat(128 * 1024)));
+      },
+      cancel() {
+        canceled = true;
+      },
+    }, { highWaterMark: 0 });
+    const vl = new VistaLink({
+      apiKey: "vl_test_abc",
+      baseUrl: "https://api.test",
+      fetch: async () => new Response(body, { status: 403, headers: { "x-request-id": "req_large_error" } }),
+    });
+
+    await expect(vl.jobs.resultStream("job_1")).rejects.toMatchObject({
+      code: "forbidden",
+      status: 403,
+      requestId: "req_large_error",
+    });
+    expect(pulls).toBe(1);
+    expect(canceled).toBe(true);
+  });
+
+  it("streams signed URLs without API or caller headers", async () => {
+    let request!: Request;
+    const body = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array([1])); c.close(); } });
+    const vl = new VistaLink({
+      apiKey: "vl_test_abc",
+      baseUrl: "https://api.test",
+      headers: { "X-Private": "do-not-send" },
+      fetch: async (req) => {
+        request = req;
+        return new Response(body);
+      },
+    });
+    const stream = await vl.jobs.downloadStream({ job_id: "job_1", result_url: "https://files.test/r.ndjson" }, { headers: { "X-Caller": "secret" } });
+    await new Response(stream).arrayBuffer();
+    expect(request.headers.has("authorization")).toBe(false);
+    expect(request.headers.has("x-private")).toBe(false);
+    expect(request.headers.has("x-caller")).toBe(false);
+    expect(request.credentials).toBe("omit");
+    expect(request.redirect).toBe("follow");
+  });
+
+  it("keeps relative same-origin result URLs authenticated and blocks redirects", async () => {
+    let request!: Request;
+    const body = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array([1])); c.close(); } });
+    const vl = new VistaLink({ apiKey: "vl_test_abc", baseUrl: "https://api.test", fetch: async (req) => { request = req; return new Response(body); } });
+    const stream = await vl.jobs.downloadStream({ job_id: "job_1", result_url: "/v2/jobs/job_1/result" });
+    await new Response(stream).arrayBuffer();
+    expect(new URL(request.url).origin).toBe("https://api.test");
+    expect(request.headers.get("authorization")).toBe("Bearer vl_test_abc");
+    expect(request.redirect).toBe("error");
+  });
+
+  it("retries stream responses and keeps API error mapping", async () => {
+    const { vl, calls } = make([
+      { status: 503, body: { error: { code: "unavailable", message: "retry" } } },
+      { status: 200, text: NDJSON },
+    ], { maxRetries: 1 });
+    const stream = await vl.jobs.resultStream("job_1");
+    expect(await new Response(stream).text()).toBe(NDJSON);
+    expect(calls).toHaveLength(2);
+
+    const failure = make([{
+      status: 403,
+      body: { error: { code: "forbidden", message: "blocked" } },
+      headers: { "x-request-id": "req_stream_error" },
+    }]);
+    await expect(failure.vl.jobs.resultStream("job_1")).rejects.toMatchObject({
+      code: "forbidden",
+      status: 403,
+      requestId: "req_stream_error",
+    });
   });
 
   it("jobs.waitForResult waits, then downloads", async () => {

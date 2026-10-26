@@ -83,6 +83,94 @@ class VistaLink:
             return b.parse_response(spec, response)
         raise AssertionError("unreachable")
 
+    def _stream(self, spec: b.Spec) -> Iterator[bytes]:
+        """Stream response bytes, retrying only before any bytes have escaped."""
+        url = spec.path if spec.anonymous else self.base_url + spec.path
+        if spec.anonymous:
+            url = str(httpx.URL(url).copy_with(username="", password=""))
+        headers = dict(spec.headers) if spec.anonymous else {**self._headers, **spec.headers}
+        for attempt in range(self._retry.max_retries + 1):
+            last = attempt >= self._retry.max_retries
+            response: httpx.Response | None = None
+            try:
+                if spec.anonymous:
+                    # A manually built request avoids the SDK and httpx client's default
+                    # headers/cookies. Redirects are followed manually so the client's
+                    # cookie jar cannot add credentials to a signed storage URL.
+                    request = httpx.Request(spec.method, url, headers=headers)
+                    response = self._http.send(request, stream=True, follow_redirects=False, auth=httpx.Auth())
+                    redirects = 0
+                    while response.status_code in (301, 302, 303, 307, 308):
+                        location = response.headers.get("location")
+                        if not location:
+                            break
+                        if redirects >= 20:
+                            status = response.status_code
+                            response.close()
+                            response = None
+                            raise VistaLinkError("upstream_error", "Downloading result_url exceeded the redirect limit",
+                                                 status=status)
+                        next_url = response.url.join(location).copy_with(username="", password="")
+                        response.close()
+                        request = httpx.Request(spec.method, str(next_url), headers=headers)
+                        response = self._http.send(request, stream=True, follow_redirects=False, auth=httpx.Auth())
+                        redirects += 1
+                else:
+                    request = self._http.build_request(spec.method, url, headers=headers)
+                    response = self._http.send(request, stream=True, follow_redirects=False)
+                if response.status_code in RETRY_STATUSES and not last:
+                    delay = backoff_delay(attempt, self._retry, parse_retry_after(response.headers.get("retry-after")))
+                    response.close()
+                    response = None
+                    self._sleep(delay)
+                    continue
+                if not response.is_success:
+                    if spec.anonymous:
+                        raise VistaLinkError(
+                            "upstream_error",
+                            f"Downloading result_url failed (HTTP {response.status_code})",
+                            status=response.status_code,
+                        )
+                    response.read()
+                    b.parse_response(spec, response)
+                    raise AssertionError("error response unexpectedly parsed")
+
+                emitted = False
+                try:
+                    for chunk in response.iter_bytes():
+                        if chunk:
+                            emitted = True
+                            yield chunk
+                    return
+                except httpx.TimeoutException as exc:
+                    if not emitted and not last:
+                        delay = backoff_delay(attempt, self._retry, None)
+                        response.close()
+                        response = None
+                        self._sleep(delay)
+                        continue
+                    raise VistaLinkError("timeout", f"Request timed out: {exc}") from exc
+                except httpx.TransportError as exc:
+                    if not emitted and not last:
+                        delay = backoff_delay(attempt, self._retry, None)
+                        response.close()
+                        response = None
+                        self._sleep(delay)
+                        continue
+                    raise VistaLinkError("network_error", f"Network error: {exc}") from exc
+            except httpx.TimeoutException as exc:
+                if last:
+                    raise VistaLinkError("timeout", f"Request timed out: {exc}") from exc
+                self._sleep(backoff_delay(attempt, self._retry, None))
+            except httpx.TransportError as exc:
+                if last:
+                    raise VistaLinkError("network_error", f"Network error: {exc}") from exc
+                self._sleep(backoff_delay(attempt, self._retry, None))
+            finally:
+                if response is not None:
+                    response.close()
+        raise AssertionError("unreachable")
+
     def _poll(self, get: Callable[[], Any], done: Callable[[Any], bool], *, timeout: float, interval: float,
               max_interval: float, on_poll: Callable[[Any], None] | None, what: str) -> Any:
         deadline = time.monotonic() + timeout
@@ -235,9 +323,17 @@ class Jobs(_Resource):
         """``GET /v2/jobs/{id}/result``: the raw NDJSON of a finished ``rates.batch`` job (free)."""
         return self._c._send(b.job_result(job_id))
 
+    def result_stream(self, job_id: str) -> Iterator[bytes]:
+        """Stream the raw NDJSON bytes; close the iterator to stop downloading early."""
+        return self._c._stream(b.job_result(job_id))
+
     def download(self, job: m.Job) -> str:
         """The NDJSON result: from a signed ``result_url`` (no API key sent), else ``GET /v2/jobs/{id}/result``."""
         return self._c._send(b.job_download(job, self._c.base_url))
+
+    def download_stream(self, job: m.Job) -> Iterator[bytes]:
+        """Stream a job result as bytes; close the iterator to stop downloading early."""
+        return self._c._stream(b.job_download(job, self._c.base_url))
 
     def wait_for_result(self, job_id: str, *, timeout: float = 600, interval: float = 2.0,
                         max_interval: float = 15.0, on_poll: Callable[[m.Job], None] | None = None) -> tuple[m.Job, str]:

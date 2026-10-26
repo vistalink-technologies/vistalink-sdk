@@ -37,6 +37,8 @@ export interface Deps {
   /** Read a file; `"-"` means stdin. */
   readFile: ReadFile;
   writeFile: (path: string, data: string) => void;
+  /** Stream NDJSON to stdout or atomically replace a destination file. */
+  writeStream?: (out: string | undefined, body: ReadableStream<Uint8Array>) => Promise<number>;
   /** Prompt for the API key without echo (or read it from piped stdin). */
   readSecret: (prompt: string) => Promise<string>;
   fetch?: (input: Request) => Promise<Response>;
@@ -284,8 +286,7 @@ export function buildProgram(deps: Deps): Command {
       // NDJSON, not JSON: written as-is.
       cmd.option("--out <path>", "write the NDJSON here (default: stdout)");
       act(cmd, deps, async (ctx, [jobId], opts) => {
-        const ndjson = await ctx.client().jobs.result(jobId);
-        writeNdjson(ctx, ndjson, opts.out as string | undefined);
+        await writeNdjsonStream(ctx, await ctx.client().jobs.resultStream(jobId), opts.out as string | undefined);
       });
       continue;
     }
@@ -580,16 +581,21 @@ function openapiHandler(o: Operation): Handler {
  * elsewhere (no API key sent), else `GET /v2/jobs/{id}/result`.
  */
 async function writeJobResult(ctx: Ctx, vl: VistaLink, job: Job, out?: string): Promise<void> {
-  writeNdjson(ctx, await vl.jobs.download(job), out);
+  await writeNdjsonStream(ctx, await vl.jobs.downloadStream(job), out);
 }
 
-function writeNdjson(ctx: Ctx, ndjson: string, out?: string) {
-  if (out) {
-    ctx.deps.writeFile(out, ndjson);
-    ctx.info(`wrote ${ndjson.split("\n").filter(Boolean).length} lines to ${out}`);
+async function writeNdjsonStream(ctx: Ctx, body: ReadableStream<Uint8Array>, out?: string) {
+  let lines: number;
+  if (ctx.deps.writeStream) {
+    lines = await ctx.deps.writeStream(out, body);
   } else {
-    ctx.deps.stdout(ndjson);
+    // Preserve compatibility for library callers with older in-memory Deps adapters.
+    const ndjson = await new Response(body).text();
+    lines = ndjson.split("\n").filter(Boolean).length;
+    if (out) ctx.deps.writeFile(out, ndjson);
+    else ctx.deps.stdout(ndjson);
   }
+  if (out) ctx.info(`wrote ${lines} lines to ${out}`);
 }
 
 /** Run the CLI and return the process exit code (never calls process.exit). */

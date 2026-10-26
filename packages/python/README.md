@@ -38,7 +38,8 @@ What the client does for you, same as the TypeScript SDK:
   every non-2xx. Client-side codes are `network_error`, `timeout`,
   `job_failed` and `job_canceled`.
 - `jobs.wait()` / `bookings.wait()`, `jobs.download()` /
-  `jobs.wait_for_result()` for `rates.batch` NDJSON (signed `result_url`, else
+  `jobs.wait_for_result()` for buffered `rates.batch` NDJSON, plus
+  `jobs.download_stream()` / `jobs.result_stream()` for raw byte streaming (signed `result_url`, else
   `GET /v2/jobs/{id}/result`), `booking_next_step()`, `jobs.list_all()` /
   `search.pages()`, and `webhooks.verify()`.
 
@@ -116,7 +117,15 @@ for row in parse_ndjson(ndjson):
     print(row["hotel_id"], row["status"])
 # jobs.download(job) alone: a signed result_url is fetched without the key;
 # when result_url is None it is GET /v2/jobs/{id}/result with the key (free).
+
+# Large results can be copied incrementally without building one large string.
+with open("rates.ndjson", "wb") as output:
+    for chunk in vl.jobs.download_stream(job):
+        output.write(chunk)
 ```
+
+`AsyncVistaLink` exposes the same streaming methods as async iterators, for example
+`async for chunk in vl.jobs.download_stream(job): ...`.
 
 ## 5. Booking (the guest always pays the property)
 

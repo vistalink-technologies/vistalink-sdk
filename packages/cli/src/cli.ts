@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { CredentialStore } from "./credentials.js";
 import { run } from "./program.js";
+import { writeNdjsonStream } from "./stream-output.js";
 
 function readStdin(): string {
   return readFileSync(0, "utf8");
@@ -54,6 +55,7 @@ const code = await run(process.argv.slice(2), {
   store: CredentialStore.default(process.env),
   readFile: (path) => (path === "-" ? readStdin() : readFileSync(path, "utf8")),
   writeFile: (path, data) => writeFileSync(path, data),
+  writeStream: (path, body) => writeNdjsonStream(body, path),
   readSecret,
 });
 process.exitCode = code;

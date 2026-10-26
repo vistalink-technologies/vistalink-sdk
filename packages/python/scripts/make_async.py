@@ -10,6 +10,42 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1] / "src" / "vistalink"
 s = (ROOT / "_client.py").read_text()
 
+# The streaming helpers are generators rather than awaitable return values.
+for old, new in [
+    (
+        "    def _stream(self, spec: b.Spec) -> Iterator[bytes]:",
+        "    async def _stream(self, spec: b.Spec) -> AsyncIterator[bytes]:",
+    ),
+    (
+        '    def result_stream(self, job_id: str) -> Iterator[bytes]:\n'
+        '        """Stream the raw NDJSON bytes; close the iterator to stop downloading early."""\n'
+        '        return self._c._stream(b.job_result(job_id))',
+        '    async def result_stream(self, job_id: str) -> AsyncIterator[bytes]:\n'
+        '        """Stream the raw NDJSON bytes; close the iterator to stop downloading early."""\n'
+        '        stream = self._c._stream(b.job_result(job_id))\n'
+        '        try:\n'
+        '            async for chunk in stream:\n'
+        '                yield chunk\n'
+        '        finally:\n'
+        '            await stream.aclose()',
+    ),
+    (
+        '    def download_stream(self, job: m.Job) -> Iterator[bytes]:\n'
+        '        """Stream a job result as bytes; close the iterator to stop downloading early."""\n'
+        '        return self._c._stream(b.job_download(job, self._c.base_url))',
+        '    async def download_stream(self, job: m.Job) -> AsyncIterator[bytes]:\n'
+        '        """Stream a job result as bytes; close the iterator to stop downloading early."""\n'
+        '        stream = self._c._stream(b.job_download(job, self._c.base_url))\n'
+        '        try:\n'
+        '            async for chunk in stream:\n'
+        '                yield chunk\n'
+        '        finally:\n'
+        '            await stream.aclose()',
+    ),
+]:
+    assert old in s, old[:80]
+    s = s.replace(old, new)
+
 R = [
     ('class VistaLink:\n    """Synchronous VistaLink API v2 client.\n\n    >>> vl = VistaLink(api_key=os.environ["VISTALINK_API_KEY"])\n    >>> vl.search.run({"query": "rooftop near the Pantheon"}).hotels\n    """',
      'class AsyncVistaLink:\n    """Asynchronous VistaLink API v2 client (same surface as :class:`VistaLink`, awaitable).\n\n    >>> async with AsyncVistaLink(api_key=os.environ["VISTALINK_API_KEY"]) as vl:\n    ...     (await vl.search.run({"query": "rooftop near the Pantheon"})).hotels\n    """'),
@@ -29,6 +65,10 @@ R = [
     ("    def _poll(self, get: Callable[[], Any]", "    async def _poll(self, get: Callable[[], Awaitable[Any]]"),
     ("            value = get()", "            value = await get()"),
     ("client: VistaLink", "client: AsyncVistaLink"),
+    ("response = self._http.send(", "response = await self._http.send("),
+    ("response.read()", "await response.aread()"),
+    ("for chunk in response.iter_bytes():", "async for chunk in response.aiter_bytes():"),
+    ("response.close()", "await response.aclose()"),
 ]
 for a, b in R:
     assert a in s, a[:60]

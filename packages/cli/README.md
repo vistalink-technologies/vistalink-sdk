@@ -41,17 +41,21 @@ rates).
 |---|---|---|
 | `hotels` | `resolve`, `get <hotel_id>` | `resolve <url\|name…> [--city --country]` |
 | `search` | `run` | `search "<query>" [--city --country --check-in --check-out --adults --budget-min --budget-max --min-stars --amenities]` |
-| `rates` | `get`, `batch` | `rates <ids\|urls…> --check-in --check-out [--live] [--channel direct\|third_party]`; `rates batch --file hotels.txt --check-in --check-out [--out r.ndjson]` waits and downloads the NDJSON (signed `result_url`, else `GET /v2/jobs/{id}/result`) |
+| `rates` | `get`, `batch` | `rates <ids\|urls…> --check-in --check-out [--live] [--channel direct\|third_party]`; `rates batch --file hotels.txt --check-in --check-out [--out r.ndjson]` waits and streams the NDJSON (signed `result_url`, else `GET /v2/jobs/{id}/result`) |
 | `rooms` | `reconcile` | `--hotel <id> --source booking_url=… --source website_url=… [--supplied rooms.json]`, waits for the job |
 | `bookings` | `create`, `get <id>`, `cancel <id>` | `create --payment-mode checkout\|handoff\|external [--return-url]`; `create --wait` polls until the guest has to act (prints the checkout, handoff or external link as `next`) or the booking is final (`confirmed`, `failed`, `expired`, `canceled`) |
 | `quotes` | `create`, `get <id>`, `cancel <id>`, `accept <id> <offer_id>` | `create --hotel-id … --stay @stay.json [--price-to-beat auto\|'{"total":"250.00","currency":"EUR"}'] [--sandbox-outcome offer]`; `accept … --guest @guest.json` sends one intro email to the hotel |
-| `jobs` | `list`, `get <id>`, `result <id>`, `cancel <id>` | `wait <id> [--timeout --interval]`. For a `rates.batch` job it downloads the NDJSON (`--out`, `--no-download`). `result <id> [--out]` writes the NDJSON as-is |
+| `jobs` | `list`, `get <id>`, `result <id>`, `cancel <id>` | `wait <id> [--timeout --interval]`. For a `rates.batch` job it streams the NDJSON (`--out`, `--no-download`). `result <id> [--out]` streams the NDJSON as-is |
 | `webhooks` | `list`, `create`, `delete <id>`, `deliveries <id>` | `tail <id> [--interval 5] [--once]` |
 | `chat` | `send` | |
 | `catalog` | `amenities`, `engines`, `health`, `openapi` | `openapi` fetches the document (public). `--url` prints only its URL |
 
 Shortcuts: `vistalink resolve …` = `hotels resolve`, `vistalink hotel <id>` =
 `hotels get`, `vistalink openapi` = `catalog openapi`.
+
+Result downloads stream to stdout by default. With `--out`, the CLI writes a
+temporary file beside the destination and replaces it only after the complete
+download succeeds, so an interrupted transfer leaves an existing file intact.
 
 Account commands: `login [--no-verify]`, `logout`, `keys list` (keys stored
 on this machine, masked). `keys create` and `keys revoke` exit 11 and point
