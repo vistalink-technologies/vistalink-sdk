@@ -40,12 +40,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache-dependency-glob: packages/python/uv.lock
-      - name: Test, typecheck, and build JavaScript packages
+      - name: Typecheck, build, and test JavaScript packages
         run: |
           pnpm install --frozen-lockfile
-          pnpm test
           pnpm typecheck
           pnpm build
+          pnpm test
       - name: Test Python SDK
         working-directory: packages/python
         run: |
