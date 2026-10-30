@@ -367,6 +367,34 @@ class BudgetFilter(BaseModel):
     ] = "per_room_per_night"
 
 
+class CanonicalNames(BaseModel):
+    """
+    Every name the room is recorded under, one per source; a source without the room is null.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    engine: Annotated[
+        str | None,
+        Field(description="Name in the hotel's booking engine.", title="Engine"),
+    ] = None
+    site: Annotated[
+        str | None, Field(description="Name on the hotel's website.", title="Site")
+    ] = None
+    booking: Annotated[
+        str | None,
+        Field(description="Name on the third-party channel listing.", title="Booking"),
+    ] = None
+    expedia: Annotated[
+        str | None, Field(description="Name on Expedia.", title="Expedia")
+    ] = None
+    supplied: Annotated[
+        str | None,
+        Field(description="Name in the rooms you supplied.", title="Supplied"),
+    ] = None
+
+
 class CanonicalRoom(BaseModel):
     """
     The room as one record, taking each fact from the most authoritative source that has it
@@ -409,6 +437,19 @@ class CanonicalRoom(BaseModel):
         Field(
             description="Beds in the room; empty when no source gives them in a structured form.",
             title="Bed Config",
+        ),
+    ] = None
+    preferred_name: Annotated[
+        str | None,
+        Field(
+            description="The name we would show for the room: the booking engine's, else the hotel site's, else the third-party channel listing's, else Expedia's; never your supplied name. Omitted when not set.",
+            title="Preferred Name",
+        ),
+    ] = None
+    names: Annotated[
+        CanonicalNames | None,
+        Field(
+            description="Every name the room is recorded under, by source; omitted when not set."
         ),
     ] = None
 
@@ -1474,6 +1515,22 @@ class JobRef(BaseModel):
     ]
 
 
+class ListingRef(BaseModel):
+    """
+    A listing named by its source and key.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    source: Annotated[
+        str, Field(description="Source label of the listing.", title="Source")
+    ]
+    listing_key: Annotated[
+        str, Field(description="The listing's key on that source.", title="Listing Key")
+    ]
+
+
 class LocationFilter(BaseModel):
     """
     Where to search: either `city` with `country`, or a `place_id` from an earlier response,
@@ -2163,6 +2220,13 @@ class Provenance(BaseModel):
             title="Images Release",
         ),
     ] = None
+    room_photos_verified: Annotated[
+        bool | None,
+        Field(
+            description="True when the hotel's room photos come from a verified room-to-photo map: each room shows only photos the source lists for that room, first photo is the cover, and a room without a verified photo has none. False means room photos are best-effort.",
+            title="Room Photos Verified",
+        ),
+    ] = False
 
 
 class QuoteAnchor(BaseModel):
@@ -2206,6 +2270,55 @@ class QuoteAnchor(BaseModel):
     ]
 
 
+class QuoteCall(BaseModel):
+    """
+    One phone attempt on a quote (``channels`` `auto` or `phone`).
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    attempt: Annotated[
+        int,
+        Field(
+            description="1 for the first call; redials after an unanswered call count up.",
+            ge=1,
+            title="Attempt",
+        ),
+    ]
+    status: Annotated[
+        Literal["scheduled", "in_progress", "answered", "unanswered"],
+        Field(
+            description="`scheduled` (see `scheduled_for`), `in_progress`, `answered` (someone at the hotel spoke with us) or `unanswered` (no answer, busy, voicemail or a failed line; free).",
+            title="Status",
+        ),
+    ]
+    scheduled_for: Annotated[
+        AwareDatetime | None,
+        Field(
+            description="When the call is (or was) due, RFC 3339 UTC; null when not known.",
+            title="Scheduled For",
+        ),
+    ] = None
+    answered_minutes: Annotated[
+        int | None,
+        Field(
+            description="Billed minutes of the answered call (talk time rounded up, at most 8); 0 when unanswered, null until the call ends.",
+            ge=0,
+            le=8,
+            title="Answered Minutes",
+        ),
+    ] = None
+    charged: Annotated[
+        str | None,
+        Field(
+            description="What this call cost, a decimal string in USD (`0` when unanswered); null until the call ends.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Charged",
+        ),
+    ] = None
+
+
 class QuoteGuest(BaseModel):
     """
     The guest introduced to the hotel when you accept an offer.
@@ -2245,7 +2358,7 @@ class QuoteGuest(BaseModel):
 
 class QuoteOffer(BaseModel):
     """
-    One priced offer the hotel sent by email, read from its reply.
+    One priced offer from the hotel, read from its emailed reply or from the phone call.
     """
 
     model_config = ConfigDict(
@@ -2259,8 +2372,11 @@ class QuoteOffer(BaseModel):
         ),
     ]
     source: Annotated[
-        Literal["email"],
-        Field(description="Always `email`: the hotel's emailed reply.", title="Source"),
+        Literal["email", "phone"] | None,
+        Field(
+            description="`email` when it came in the hotel's emailed reply, `phone` when the hotel gave it on our call.",
+            title="Source",
+        ),
     ] = "email"
     room_name: Annotated[
         str | None,
@@ -2350,7 +2466,7 @@ class QuoteOffer(BaseModel):
     evidence: Annotated[
         str | None,
         Field(
-            description="The sentence of the hotel's reply the price was read from, up to 280 characters.",
+            description="The sentence of the hotel's reply (or of the call transcript) the price was read from, up to 280 characters.",
             title="Evidence",
         ),
     ] = None
@@ -2389,6 +2505,70 @@ class QuoteStay(BaseModel):
     ]
     rooms: Annotated[
         list[Occupancy] | None, Field(description="One entry per room.", title="Rooms")
+    ] = None
+
+
+class QuoteVoucher(BaseModel):
+    """
+    What the guest needs to book a PHONE offer directly when we hold no email address for the hotel.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    hotel_name: Annotated[
+        str | None, Field(description="The hotel's name.", title="Hotel Name")
+    ] = None
+    hotel_phone: Annotated[
+        str | None,
+        Field(description="The hotel's phone number, E.164.", title="Hotel Phone"),
+    ] = None
+    total: Annotated[
+        str | None,
+        Field(
+            description="The price the hotel gave on the call.",
+            pattern="^-?\\d+(\\.\\d+)?$",
+            title="Total",
+        ),
+    ] = None
+    currency: Annotated[
+        str | None,
+        Field(
+            description="ISO 4217 currency of `total`.",
+            pattern="^[A-Z]{3}$",
+            title="Currency",
+        ),
+    ] = None
+    room_name: Annotated[
+        str | None, Field(description="Room the hotel offered.", title="Room Name")
+    ] = None
+    rate_name: Annotated[
+        str | None, Field(description="Short summary of the terms.", title="Rate Name")
+    ] = None
+    board: Annotated[
+        Literal["none", "breakfast", "half", "full", "all_inclusive"] | None,
+        Field(description="Meals included, or null when not said.", title="Board"),
+    ] = None
+    free_cancellation: Annotated[
+        bool | None,
+        Field(
+            description="Free cancellation, or null when not said.",
+            title="Free Cancellation",
+        ),
+    ] = None
+    reference: Annotated[
+        str | None,
+        Field(
+            description="The reference to quote to the hotel (the quote id).",
+            title="Reference",
+        ),
+    ] = None
+    notes: Annotated[
+        str | None,
+        Field(
+            description="Anything else the hotel said that the guest should know.",
+            title="Notes",
+        ),
     ] = None
 
 
@@ -2493,6 +2673,25 @@ class RateChannel(BaseModel):
     ] = None
 
 
+class RatePropertyKey(BaseModel):
+    """
+    The engine's property identifier, as the rate adapter names it.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    name: Annotated[
+        str, Field(description="Parameter name, for example `hotelId`.", title="Name")
+    ]
+    value: Annotated[
+        str,
+        Field(
+            description="Its value for this hotel, for example `110598`.", title="Value"
+        ),
+    ]
+
+
 class RateRoom(BaseModel):
     """
     Prices for one room at a hotel.
@@ -2562,6 +2761,62 @@ class RatesSummary(BaseModel):
     ] = 0
 
 
+class ReconcileCatalogue(BaseModel):
+    """
+    Which stored catalogue build answered.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    result_id: Annotated[
+        str | None,
+        Field(
+            description="Id of the catalogue build; null before it is registered.",
+            title="Result Id",
+        ),
+    ] = None
+    built_at: Annotated[
+        str | None,
+        Field(description="When the build was made, RFC 3339 UTC.", title="Built At"),
+    ] = None
+    cascade_version: Annotated[
+        str | None,
+        Field(
+            description="Version of the matching pipeline that built it.",
+            title="Cascade Version",
+        ),
+    ] = None
+    conf_version: Annotated[
+        str | None,
+        Field(
+            description="Version of the confidence model, for example `conf-v0`.",
+            title="Conf Version",
+        ),
+    ] = None
+    gate_passed: Annotated[
+        bool | None,
+        Field(
+            description="True when that confidence model passed its accuracy gate; while false, reported confidences are capped at 0.79.",
+            title="Gate Passed",
+        ),
+    ] = None
+    registry_watermark: Annotated[
+        Any,
+        Field(
+            description="Opaque marker of the catalogue registry state the build was served at.",
+            title="Registry Watermark",
+        ),
+    ] = None
+    lease_until: Annotated[
+        str | None,
+        Field(
+            description="Until when the build may be served, RFC 3339 UTC; after it the service falls back to matching on the fly. Null when no bound is set.",
+            title="Lease Until",
+        ),
+    ] = None
+
+
 class ReconcileConflict(BaseModel):
     """
     A fact the matched listings disagree on.
@@ -2586,70 +2841,44 @@ class ReconcileConflict(BaseModel):
     ]
 
 
-class ReconcileListing(BaseModel):
+class RelatedListing(BaseModel):
     """
-    One listing of a room on one source.
+    A directed relation between two listings that are not the same room.
     """
 
     model_config = ConfigDict(
         extra="allow",
     )
-    source: Annotated[
-        str,
+    from_: Annotated[
+        ListingRef,
+        Field(alias="from", description="The listing the relation starts from."),
+    ]
+    relation: Annotated[
+        Literal[
+            "covers",
+            "unit_of",
+            "offer_for",
+            "name_match_candidate",
+            "same_not_merged",
+            "ambiguous_name_match",
+            "unresolved_candidate",
+        ],
         Field(
-            description="Source label: `booking`, `site`, `expedia`, or the `label` of rooms you supplied.",
-            title="Source",
+            description="`covers` (one listing sells the other under a shared name), `unit_of`, `offer_for` (a package or rate of the other room), `name_match_candidate`, `same_not_merged` (alike but kept apart because facts contradict), `ambiguous_name_match` or `unresolved_candidate` (a possible match left undecided).",
+            title="Relation",
         ),
     ]
-    name: Annotated[
-        str | None, Field(description="Room name on that source.", title="Name")
-    ] = None
-    listing_key: Annotated[
-        str | None,
-        Field(
-            description="The listing's key: `room_type:<id>` or `room:<id>` on channels, the site's room key, or your `key` for supplied rooms.",
-            title="Listing Key",
-        ),
-    ] = None
-    url: Annotated[
-        str | None,
-        Field(
-            description="Page of the listing, or the source URL you sent; null when neither is known.",
-            title="Url",
-        ),
-    ] = None
-
-
-class ReconciledRoom(BaseModel):
-    """
-    One room matched across sources.
-    """
-
-    model_config = ConfigDict(
-        extra="allow",
-    )
-    canonical: Annotated[CanonicalRoom, Field(description="The room as one record.")]
-    listings: Annotated[
-        list[ReconcileListing] | None,
-        Field(
-            description="Every listing of this room, one or more per source.",
-            title="Listings",
-        ),
-    ] = None
+    to: Annotated[ListingRef, Field(description="The listing the relation points to.")]
     confidence: Annotated[
-        float,
-        Field(description="Confidence of the match from 0 to 1.", title="Confidence"),
-    ]
+        float | None,
+        Field(
+            description="Confidence from 0 to 1; null while confidence is uncalibrated.",
+            title="Confidence",
+        ),
+    ] = None
     basis: Annotated[
         list[str] | None,
-        Field(
-            description="Evidence the match rests on, for example `name_exact`, `name_similarity:0.81`, `size_match`, `occupancy_match`, `beds_overlap:1.00` or `image_similarity:0.88`.",
-            title="Basis",
-        ),
-    ] = None
-    conflicts: Annotated[
-        list[ReconcileConflict] | None,
-        Field(description="Facts the listings disagree on.", title="Conflicts"),
+        Field(description="Evidence the relation rests on.", title="Basis"),
     ] = None
 
 
@@ -3112,6 +3341,51 @@ class SharedListing(BaseModel):
     ] = None
 
 
+class SourceStatus(BaseModel):
+    """
+    Whether one input source could be matched.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    input: Annotated[
+        int,
+        Field(
+            description="Position of the source in the request's `sources`, from 0.",
+            title="Input",
+        ),
+    ]
+    kind: Annotated[
+        str,
+        Field(
+            description="The source's `kind` as sent: `booking_url`, `website_url`, `expedia_url` or `rooms`.",
+            title="Kind",
+        ),
+    ]
+    label: Annotated[
+        str,
+        Field(
+            description="Label its listings use in `rooms` and `unmatched`.",
+            title="Label",
+        ),
+    ]
+    status: Annotated[
+        Literal["ok", "unsupported"],
+        Field(
+            description="`ok` when its rooms were matched; `unsupported` when we cannot read this source yet.",
+            title="Status",
+        ),
+    ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why it is `unsupported`, for example `expedia_not_ingested`; null when `ok`.",
+            title="Reason",
+        ),
+    ] = None
+
+
 class Stay(BaseModel):
     """
     Dates and rooms of a stay, up to 30 nights and 9 rooms.
@@ -3263,44 +3537,6 @@ class TimelineEntry(BaseModel):
     ]
 
 
-class UnmatchedListing(BaseModel):
-    """
-    A listing that matched no room on another source.
-    """
-
-    model_config = ConfigDict(
-        extra="allow",
-    )
-    source: Annotated[
-        str,
-        Field(
-            description="Source label: `booking`, `site`, `expedia`, or the `label` of rooms you supplied.",
-            title="Source",
-        ),
-    ]
-    name: Annotated[
-        str | None, Field(description="Room name on that source.", title="Name")
-    ] = None
-    listing_key: Annotated[
-        str | None,
-        Field(
-            description="The listing's key: `room_type:<id>` or `room:<id>` on channels, the site's room key, or your `key` for supplied rooms.",
-            title="Listing Key",
-        ),
-    ] = None
-    url: Annotated[
-        str | None,
-        Field(
-            description="Page of the listing, or the source URL you sent; null when neither is known.",
-            title="Url",
-        ),
-    ] = None
-    nearest: Annotated[
-        NearestListing | None,
-        Field(description="The closest candidate it had; null when there was none."),
-    ] = None
-
-
 class UrlSource(BaseModel):
     """
     A channel whose rooms to include, named by a URL. Rooms are read from our catalogue for
@@ -3313,7 +3549,7 @@ class UrlSource(BaseModel):
     kind: Annotated[
         Literal["booking_url", "expedia_url", "website_url"],
         Field(
-            description="`booking_url` (third-party channel listing), `website_url` (the hotel's website) or `expedia_url`; their listings appear under the labels `booking`, `site` and `expedia`.",
+            description="`booking_url` (third-party channel listing), `website_url` (the hotel's website) or `expedia_url`; their listings appear under the labels `booking`, `site` and `expedia`. `expedia_url` is accepted but not matched yet: until Expedia listings are ingested it comes back in `source_status` as `unsupported` (`expedia_not_ingested`), adds no listings.",
             title="Kind",
         ),
     ]
@@ -4511,7 +4747,7 @@ class JobList(BaseModel):
 
 class Quote(BaseModel):
     """
-    A request for a price quote, emailed to the hotel by VistaLink. Returned by create, get,
+    A request for a price quote, asked of the hotel by VistaLink by email and/or phone. Returned by create, get,
     cancel and accept, and as `data` in `quote.updated`.
     """
 
@@ -4534,6 +4770,7 @@ class Quote(BaseModel):
             "queued",
             "contacting",
             "waiting",
+            "calling",
             "offer_received",
             "completed",
             "no_response",
@@ -4543,7 +4780,7 @@ class Quote(BaseModel):
             "accepted",
         ],
         Field(
-            description="Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`.",
+            description="Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply, or a call is scheduled), `calling` (we are calling the hotel; see `calls`), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`.",
             title="Status",
         ),
     ]
@@ -4585,10 +4822,24 @@ class Quote(BaseModel):
             description="When the quote last changed, RFC 3339 UTC.", title="Updated At"
         ),
     ]
+    channels: Annotated[
+        Literal["auto", "email", "phone"] | None,
+        Field(
+            description="How the hotel is being asked: `email`, `phone`, or `auto` (email first, then a call). It can differ from what you asked for: `auto` runs email-only where calling is not available, and as phone-only when we hold no email address for the hotel.",
+            title="Channels",
+        ),
+    ] = "email"
+    calls: Annotated[
+        list[QuoteCall] | None,
+        Field(
+            description="Phone attempts, oldest first; empty for an email-only quote.",
+            title="Calls",
+        ),
+    ] = None
     offers: Annotated[
         list[QuoteOffer] | None,
         Field(
-            description="Priced offers from the hotel's replies, oldest first.",
+            description="Priced offers from the hotel's replies and calls, oldest first.",
             title="Offers",
         ),
     ] = None
@@ -4602,8 +4853,28 @@ class Quote(BaseModel):
     hotel_commission_applies: Annotated[
         bool | None,
         Field(
-            description="After acceptance: true when the hotel pays a commission on the booking (half of it is yours), false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known.",
+            description="After acceptance: true when the hotel pays a commission on the booking, false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known. Your part of any commission is `partner_commission_share`.",
             title="Hotel Commission Applies",
+        ),
+    ] = None
+    partner_commission_share: Annotated[
+        Literal["0.5", "0"] | None,
+        Field(
+            description="After acceptance: your share of the hotel's commission on the booking, a decimal string: `0.5` (half) for an offer the hotel sent by email, `0` for an offer it gave on a phone call; null before acceptance.",
+            title="Partner Commission Share",
+        ),
+    ] = None
+    handoff: Annotated[
+        Literal["introduction", "voucher"] | None,
+        Field(
+            description="After acceptance: `introduction` when we emailed the hotel with your guest copied; `voucher` when we hold no email address for the hotel (a phone offer), so nothing was sent and you give the guest `voucher` to book with the hotel directly. Null before acceptance.",
+            title="Handoff",
+        ),
+    ] = None
+    voucher: Annotated[
+        QuoteVoucher | None,
+        Field(
+            description="With `handoff` `voucher`: the details the guest needs; null otherwise."
         ),
     ] = None
     failure_reason: Annotated[
@@ -4616,17 +4887,21 @@ class Quote(BaseModel):
             "opted_out",
             "unreachable",
             "rejected",
+            "no_contact",
+            "no_contact_phone",
+            "phone_unavailable",
+            "do_not_call",
         ]
         | None,
         Field(
-            description="Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable` or `rejected`; null otherwise.",
+            description="Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable`, `rejected`, or for calls `no_contact` (neither an email address nor a phone number), `no_contact_phone`, `phone_unavailable` or `do_not_call`; null otherwise.",
             title="Failure Reason",
         ),
     ] = None
     billing: Annotated[
         None,
         Field(
-            description="Always null on responses: the quote fee is charged once, when the hotel's first priced offer arrives, and shows in usage.",
+            description="Always null on responses: the email fee is charged once, when the hotel's first priced offer arrives by email, and answered call minutes when each call ends; both show in usage and per call in `calls`.",
             title="Billing",
         ),
     ] = None
@@ -4698,11 +4973,74 @@ class QuoteRequest(BaseModel):
             title="Locale",
         ),
     ] = None
-    sandbox_outcome: Annotated[
-        Literal["offer", "declined", "no_response"] | None,
+    channels: Annotated[
+        Literal["auto", "email", "phone"] | None,
         Field(
-            description="Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 on a live key.",
+            description="How the hotel is asked. `auto` (the default) emails it first and, when it has not answered 12 hours after the email went out, calls it at the next opening-hours window (09:00 to 20:00 hotel time); `email` only emails; `phone` only calls. Calls are made by VistaLink's voice agent, VistaLink-branded and without naming the guest. Where calling is not available yet, `auto` runs email-only and `phone` answers 403 `not_yet_available`.",
+            title="Channels",
+        ),
+    ] = "auto"
+    sandbox_outcome: Annotated[
+        Literal[
+            "offer",
+            "declined",
+            "no_response",
+            "call_offer",
+            "call_unanswered",
+            "call_declined",
+        ]
+        | None,
+        Field(
+            description="Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response` by email, or `call_offer`, `call_unanswered` or `call_declined` on a simulated phone call (needs `channels` `auto` or `phone`). Rejected with 400 on a live key.",
             title="Sandbox Outcome",
+        ),
+    ] = None
+
+
+class RateJoin(BaseModel):
+    """
+    How rates from the hotel's booking engine attach to this room: the engine room code they carry.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    adapter: Annotated[
+        str | None,
+        Field(description="The rate adapter that reads this engine.", title="Adapter"),
+    ] = None
+    property_key: Annotated[
+        RatePropertyKey | None,
+        Field(
+            description="The engine's id for the hotel; null when the engine has none."
+        ),
+    ] = None
+    room_code: Annotated[
+        str | None,
+        Field(
+            description="The engine's code for this room, compared as an exact string; null when the engine has none.",
+            title="Room Code",
+        ),
+    ] = None
+    room_code_namespace: Annotated[
+        str | None,
+        Field(
+            description="Which code space `room_code` is in, for example `travelclick_be5_roomtypeid`.",
+            title="Room Code Namespace",
+        ),
+    ] = None
+    rate_plan_ids: Annotated[
+        list[str] | None,
+        Field(
+            description="Rate plan ids the engine lists for this room; may be empty.",
+            title="Rate Plan Ids",
+        ),
+    ] = None
+    notes: Annotated[
+        str | None,
+        Field(
+            description="Notes carried verbatim from the engine catalogue.",
+            title="Notes",
         ),
     ] = None
 
@@ -4928,65 +5266,291 @@ class RatesResponse(BaseModel):
     ] = None
 
 
-class ReconcileResult(BaseModel):
+class ReconcileEngine(BaseModel):
     """
-    Result of `POST /v2/rooms/reconcile`: the response body when synchronous, the job
-    `result` otherwise.
+    The hotel's booking-engine record behind a listing.
     """
 
     model_config = ConfigDict(
         extra="allow",
     )
-    request_id: Annotated[
+    engine: Annotated[
         str | None,
         Field(
-            description="Id of the request; null inside a job result.",
-            title="Request Id",
+            description="Booking engine, for example `travelclick` or `marriott`.",
+            title="Engine",
         ),
     ] = None
-    hotel_id: Annotated[
+    engine_row_id: Annotated[
         str | None,
         Field(
-            description="The hotel matched; null only when supplied-rooms-only sources named no known hotel.",
-            title="Hotel Id",
+            description="Id of the room in our engine catalogue.", title="Engine Row Id"
         ),
     ] = None
-    reconciliation_id: Annotated[
+    sale_status: Annotated[
+        Literal["sold_direct", "configured_not_sold_direct", "unknown"] | None,
+        Field(
+            description="`sold_direct` when the engine sells the room, `configured_not_sold_direct` when it is set up but not on sale, `unknown` otherwise.",
+            title="Sale Status",
+        ),
+    ] = None
+    is_package: Annotated[
+        bool | None,
+        Field(
+            description="True when the engine product is a package (room plus extras), not a plain room.",
+            title="Is Package",
+        ),
+    ] = None
+    single_use_of: Annotated[
+        str | None,
+        Field(
+            description="For a single-use product: `engine_row_id` of the room it is sold from; null otherwise.",
+            title="Single Use Of",
+        ),
+    ] = None
+    rate_join: Annotated[
+        RateJoin | None,
+        Field(
+            description="How rates attach to this room; null when the engine gives no code."
+        ),
+    ] = None
+
+
+class ReconcileEngineProduct(BaseModel):
+    """
+    One engine product sold as this room, verbatim from the engine catalogue.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Booking engine, for example `travelclick` or `marriott`.",
+            title="Engine",
+        ),
+    ] = None
+    engine_row_id: Annotated[
+        str | None,
+        Field(
+            description="Id of the room in our engine catalogue.", title="Engine Row Id"
+        ),
+    ] = None
+    sale_status: Annotated[
+        Literal["sold_direct", "configured_not_sold_direct", "unknown"] | None,
+        Field(
+            description="`sold_direct` when the engine sells the room, `configured_not_sold_direct` when it is set up but not on sale, `unknown` otherwise.",
+            title="Sale Status",
+        ),
+    ] = None
+    is_package: Annotated[
+        bool | None,
+        Field(
+            description="True when the engine product is a package (room plus extras), not a plain room.",
+            title="Is Package",
+        ),
+    ] = None
+    single_use_of: Annotated[
+        str | None,
+        Field(
+            description="For a single-use product: `engine_row_id` of the room it is sold from; null otherwise.",
+            title="Single Use Of",
+        ),
+    ] = None
+    rate_join: Annotated[
+        RateJoin | None,
+        Field(
+            description="How rates attach to this room; null when the engine gives no code."
+        ),
+    ] = None
+    name: Annotated[
+        str | None, Field(description="Product name in the engine.", title="Name")
+    ] = None
+
+
+class ReconcileListing(BaseModel):
+    """
+    One listing of a room on one source.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    source: Annotated[
         str,
         Field(
-            description="Id of this reconciliation, `rec_` plus hex; the same inputs give the same id.",
-            title="Reconciliation Id",
+            description="Source label: `booking`, `site`, `expedia`, `engine` (the hotel's booking engine, which comes with its site), or the `label` of rooms you supplied.",
+            title="Source",
         ),
     ]
-    version: Annotated[
-        str,
+    name: Annotated[
+        str | None, Field(description="Room name on that source.", title="Name")
+    ] = None
+    listing_key: Annotated[
+        str | None,
         Field(
-            description="Matcher version, for example `reconcile-v1.0`.",
-            title="Version",
+            description="The listing's key: `room_type:<id>` or `room:<id>` on channels, the site's room key, or your `key` for supplied rooms.",
+            title="Listing Key",
+        ),
+    ] = None
+    url: Annotated[
+        str | None,
+        Field(
+            description="Page of the listing, or the source URL you sent; null when neither is known.",
+            title="Url",
+        ),
+    ] = None
+    relation: Annotated[
+        Literal["same"] | None,
+        Field(
+            description="Always `same` when reported: the listing is this room. Other relations between listings are in the result's `related`.",
+            title="Relation",
+        ),
+    ] = None
+    decided_by: Annotated[
+        Literal[
+            "catalogue:d3",
+            "catalogue:qwen",
+            "catalogue:v8",
+            "catalogue:deterministic",
+            "catalogue:fable_teacher",
+            "catalogue:assistant_verified",
+            "prematch",
+        ]
+        | None,
+        Field(
+            description="What placed the listing in this room: `catalogue:<method>` when it came from the stored room catalogue (`deterministic` for an exact engine link, `d3`, `qwen` or `v8` for a model, `fable_teacher` or `assistant_verified` for a reviewed label), `prematch` when matched on the fly. Omitted when not set.",
+            title="Decided By",
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="Confidence from 0 to 1 that this listing belongs to the room; omitted while confidence is uncalibrated or when not set.",
+            title="Confidence",
+        ),
+    ] = None
+    verified: Annotated[
+        Literal["owner", "assistant", "fable_teacher"] | None,
+        Field(
+            description="Who reviewed this membership: `owner` (a person on our side), `assistant` or `fable_teacher` (model reviewers); omitted when it was not reviewed.",
+            title="Verified",
+        ),
+    ] = None
+    model_disagrees_with_verified: Annotated[
+        bool | None,
+        Field(
+            description="True when the matching model disagrees with the reviewed label; omitted until model scores exist or when the membership was not reviewed.",
+            title="Model Disagrees With Verified",
+        ),
+    ] = None
+    identity_sha256: Annotated[
+        str | None,
+        Field(
+            description="SHA-256 of the listing's identity-relevant facts when the catalogue was built; a listing whose facts have changed since no longer counts as this room. Omitted when not set.",
+            title="Identity Sha256",
+        ),
+    ] = None
+    engine: Annotated[
+        ReconcileEngine | None,
+        Field(
+            description="For a booking-engine listing, the engine record behind it; omitted otherwise."
+        ),
+    ] = None
+
+
+class ReconciledRoom(BaseModel):
+    """
+    One room matched across sources.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    canonical: Annotated[CanonicalRoom, Field(description="The room as one record.")]
+    listings: Annotated[
+        list[ReconcileListing] | None,
+        Field(
+            description="Every listing of this room, one or more per source.",
+            title="Listings",
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="Confidence of the match from 0 to 1; null until calibrated: a room from the stored catalogue has no calibrated score yet, and its `confidence_status` says why.",
+            title="Confidence",
         ),
     ]
-    rooms: Annotated[
-        list[ReconciledRoom] | None,
-        Field(description="Rooms matched across sources.", title="Rooms"),
-    ] = None
-    unmatched: Annotated[
-        dict[str, list[UnmatchedListing]] | None,
+    confidence_status: Annotated[
+        Literal["uncalibrated", "illustrative", "calibrated"] | None,
         Field(
-            description="Listings that matched nothing, keyed by source label.",
-            title="Unmatched",
+            description="What `confidence` is: `uncalibrated` (null, no calibrated score yet), `illustrative` (a placeholder score, not a measured probability) or `calibrated`. Omitted when not set.",
+            title="Confidence Status",
         ),
     ] = None
-    shared: Annotated[
-        list[SharedListing] | None,
+    seen_in_training: Annotated[
+        bool | None,
         Field(
-            description="Listings that sell several rooms under one name.",
-            title="Shared",
+            description="True when this hotel was in the data the confidence model was fitted on; omitted until `confidence` is calibrated.",
+            title="Seen In Training",
         ),
     ] = None
-    billing: Annotated[
-        Billing | None,
+    basis: Annotated[
+        list[str] | None,
         Field(
-            description='What the reconciliation cost; amount `"0"` for an identical request repeated within 30 days.'
+            description="Evidence the match rests on, for example `name_exact`, `name_similarity:0.81`, `size_match`, `occupancy_match`, `beds_overlap:1.00` or `image_similarity:0.88`.",
+            title="Basis",
+        ),
+    ] = None
+    conflicts: Annotated[
+        list[ReconcileConflict] | None,
+        Field(description="Facts the listings disagree on.", title="Conflicts"),
+    ] = None
+    room_type_id: Annotated[
+        str | None,
+        Field(
+            description="Stable catalogue id (a UUID) of the physical room type; omitted when not set.",
+            title="Room Type Id",
+        ),
+    ] = None
+    cluster_id: Annotated[
+        str | None,
+        Field(
+            description="Id of the room's group in the catalogue build; omitted when not set.",
+            title="Cluster Id",
+        ),
+    ] = None
+    coverage: Annotated[
+        Literal[
+            "multi_source", "engine_only", "site_only", "booking_only", "expedia_only"
+        ]
+        | None,
+        Field(
+            description="`multi_source` for a room in `rooms`; omitted when not set.",
+            title="Coverage",
+        ),
+    ] = None
+    sale_status: Annotated[
+        Literal["sold_direct", "configured_not_sold_direct"] | None,
+        Field(
+            description="`sold_direct` when the hotel's booking engine sells any product of this room, `configured_not_sold_direct` when every one is set up but not on sale; omitted without engine products or when not set.",
+            title="Sale Status",
+        ),
+    ] = None
+    engine_products: Annotated[
+        list[ReconcileEngineProduct] | None,
+        Field(
+            description="One entry per booking-engine listing in the room, verbatim from the engine catalogue, with how rates attach; empty when the room has none, omitted when not set.",
+            title="Engine Products",
+        ),
+    ] = None
+    conflicts_extended: Annotated[
+        list[ReconcileConflict] | None,
+        Field(
+            description="Disagreements on facts outside the three in `conflicts` (same shape), such as `name`, `bathroom`, `occupancy` against the engine, or `sale_status`; omitted when not set.",
+            title="Conflicts Extended",
         ),
     ] = None
 
@@ -5430,6 +5994,103 @@ class SearchResponse(BaseModel):
     ] = None
 
 
+class UnmatchedListing(BaseModel):
+    """
+    A listing that matched no room on another source.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    source: Annotated[
+        str,
+        Field(
+            description="Source label: `booking`, `site`, `expedia`, `engine` (the hotel's booking engine, which comes with its site), or the `label` of rooms you supplied.",
+            title="Source",
+        ),
+    ]
+    name: Annotated[
+        str | None, Field(description="Room name on that source.", title="Name")
+    ] = None
+    listing_key: Annotated[
+        str | None,
+        Field(
+            description="The listing's key: `room_type:<id>` or `room:<id>` on channels, the site's room key, or your `key` for supplied rooms.",
+            title="Listing Key",
+        ),
+    ] = None
+    url: Annotated[
+        str | None,
+        Field(
+            description="Page of the listing, or the source URL you sent; null when neither is known.",
+            title="Url",
+        ),
+    ] = None
+    nearest: Annotated[
+        NearestListing | None,
+        Field(description="The closest candidate it had; null when there was none."),
+    ] = None
+    relation_hint: Annotated[
+        Literal[
+            "abstained_same",
+            "offer_for",
+            "unit_of",
+            "covered_by",
+            "covers",
+            "has_unit",
+            "has_offer",
+            "name_match_candidate",
+            "same_not_merged",
+            "ambiguous_name_match",
+            "unresolved_candidate",
+            "single_use_of",
+            "has_single_use",
+        ]
+        | None,
+        Field(
+            description="How the listing relates to another listing without being the same room, for example `covered_by` (sold under a shared listing), `offer_for` (a package of another room), `unit_of`, `single_use_of` or `unresolved_candidate` (a possible match left undecided). The edges themselves are in `related`. Omitted when there is none or it was not set.",
+            title="Relation Hint",
+        ),
+    ] = None
+    sale_status: Annotated[
+        Literal["sold_direct", "configured_not_sold_direct", "unknown"] | None,
+        Field(
+            description="For a booking-engine listing: `sold_direct`, `configured_not_sold_direct` or `unknown`.",
+            title="Sale Status",
+        ),
+    ] = None
+    engine: Annotated[
+        ReconcileEngine | None,
+        Field(
+            description="For a booking-engine listing, the engine record behind it; omitted otherwise."
+        ),
+    ] = None
+    room_type_id: Annotated[
+        str | None,
+        Field(
+            description="Stable catalogue id (a UUID) of the room type this listing alone represents; omitted when not set.",
+            title="Room Type Id",
+        ),
+    ] = None
+    cluster_id: Annotated[
+        str | None,
+        Field(
+            description="Id of the listing's group in the catalogue build; omitted when not set.",
+            title="Cluster Id",
+        ),
+    ] = None
+    coverage: Annotated[
+        Literal[
+            "multi_source", "engine_only", "site_only", "booking_only", "expedia_only"
+        ]
+        | None,
+        Field(
+            description="Which source the room is known from alone: `engine_only`, `site_only`, `booking_only` or `expedia_only`. Omitted when not set.",
+            title="Coverage",
+        ),
+    ] = None
+
+
 class Venue(BaseModel):
     """
     A place at the hotel: a restaurant, bar, spa, pool, gym and so on.
@@ -5706,3 +6367,100 @@ class ReconcileRequest(BaseModel):
             title="Min Confidence",
         ),
     ] = 0.5
+
+
+class ReconcileResult(BaseModel):
+    """
+    Result of `POST /v2/rooms/reconcile`: the response body when synchronous, the job
+    `result` otherwise.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            description="Id of the request; null inside a job result.",
+            title="Request Id",
+        ),
+    ] = None
+    hotel_id: Annotated[
+        str | None,
+        Field(
+            description="The hotel matched; null only when supplied-rooms-only sources named no known hotel.",
+            title="Hotel Id",
+        ),
+    ] = None
+    reconciliation_id: Annotated[
+        str,
+        Field(
+            description="Id of this reconciliation, `rec_` plus hex; the same inputs give the same id.",
+            title="Reconciliation Id",
+        ),
+    ]
+    version: Annotated[
+        str,
+        Field(
+            description="Matcher version, for example `reconcile-v1.0`.",
+            title="Version",
+        ),
+    ]
+    rooms: Annotated[
+        list[ReconciledRoom] | None,
+        Field(description="Rooms matched across sources.", title="Rooms"),
+    ] = None
+    unmatched: Annotated[
+        dict[str, list[UnmatchedListing]] | None,
+        Field(
+            description="Listings that matched nothing, keyed by source label.",
+            title="Unmatched",
+        ),
+    ] = None
+    shared: Annotated[
+        list[SharedListing] | None,
+        Field(
+            description="Listings that sell several rooms under one name.",
+            title="Shared",
+        ),
+    ] = None
+    source_status: Annotated[
+        list[SourceStatus] | None,
+        Field(
+            description="One entry per source you sent, in order. An `unsupported` source added no listings; its label still appears in `unmatched` with an empty list.",
+            title="Source Status",
+        ),
+    ] = None
+    coverage: Annotated[
+        Literal["catalogue", "catalogue+prematch", "prematch_only"] | None,
+        Field(
+            description="How the result was made: `catalogue` (from the stored room catalogue), `catalogue+prematch` (catalogue plus listings matched on the fly) or `prematch_only` (matched on the fly). Omitted when not set.",
+            title="Coverage",
+        ),
+    ] = None
+    catalogue_pending: Annotated[
+        bool | None,
+        Field(
+            description="True when the hotel is queued for a catalogue build (not covered yet, or stale); ask again later for a catalogue answer. Omitted when not set.",
+            title="Catalogue Pending",
+        ),
+    ] = None
+    catalogue: Annotated[
+        ReconcileCatalogue | None,
+        Field(
+            description="Which stored catalogue build answered; omitted for `prematch_only` or when not set."
+        ),
+    ] = None
+    related: Annotated[
+        list[RelatedListing] | None,
+        Field(
+            description="Relations between listings that are not the same room, such as a shared listing that covers another or a package offered for a room; omitted when not set.",
+            title="Related",
+        ),
+    ] = None
+    billing: Annotated[
+        Billing | None,
+        Field(
+            description='What the reconciliation cost; amount `"0"` for an identical request repeated within 30 days.'
+        ),
+    ] = None
