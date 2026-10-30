@@ -663,7 +663,7 @@
           "Rates"
         ],
         "summary": "Rates for many hotels and stays",
-        "description": "Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher (a Free plan's test key may try `freshness: cached` with up to 25 hotels and 1 stay). Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when the batch has 1,000 hotels or more. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.",
+        "description": "Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher (a Free plan's test key may try `freshness: cached` with up to 25 hotels and 1 stay). Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when at least 1,000 different hotels resolve. Identical stays (including room occupancy) for the same hotel are billed once. Submission needs credit for the undiscounted input hotel × stay matrix; unused credit is released at settlement. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay` dates and zero-based `stay_index` into the request's `stays[]`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.",
         "operationId": "batchRates",
         "requestBody": {
           "content": {
@@ -764,7 +764,7 @@
           "rates.direct.live",
           "rates.batch"
         ],
-        "x-vistalink-sku-rule": "Same unit prices as `POST /v2/rates`, 25% off when the batch has 1,000 hotels or more.",
+        "x-vistalink-sku-rule": "Same unit prices as `POST /v2/rates`, 25% off when at least 1,000 different hotels resolve; duplicate references and unresolved inputs do not count. Submission reserves credit for the undiscounted input hotel × stay matrix; unused credit is released at settlement.",
         "x-vistalink-cli": "vistalink rates batch",
         "parameters": [
           {
@@ -1512,7 +1512,7 @@
           "Quotes"
         ],
         "summary": "Request a quote from a hotel",
-        "description": "Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone and cost nothing, on every plan, Free included: a simulated hotel answers within seconds, as `sandbox_outcome` says.",
+        "description": "Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. With `channels` `auto` (the default) a hotel that has not answered 12 hours after the email is called at its next opening-hours window by VistaLink's voice agent (VistaLink-branded, the guest is not named); `phone` only calls; `email` only emails. Where calling is not available yet, `auto` runs email-only and `phone` answers 403 `not_yet_available`. Costs $0.25 per quote the hotel answers with a price by email, charged once when the first priced offer arrives; nothing when the hotel declines or does not reply. Calls (`channels` `auto` or `phone`) cost $0.20 per answered minute, talk time rounded up and at most 8 minutes a call; unanswered calls are free, and the $0.25 is not charged when the hotel's first price came on our call. Both are reserved from your credit now ($0.25 when the hotel may be emailed, $1.60 when it may be called) and whatever is not charged is released when the quote closes. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email or call anyone and cost nothing, on every plan, Free included: a simulated hotel answers within seconds, as `sandbox_outcome` says.",
         "operationId": "createQuote",
         "requestBody": {
           "content": {
@@ -1620,9 +1620,10 @@
         "x-vistalink-kind": "job",
         "x-vistalink-scope": "quotes",
         "x-vistalink-sku": [
-          "quote.email.received"
+          "quote.email.received",
+          "quote.phone.minute"
         ],
-        "x-vistalink-sku-rule": "Reserved when the quote is created and charged once, when the hotel's first priced offer arrives. Released when the quote closes without one (declined, no reply, cancelled, failed). Returning your open quote for the same hotel and stay is free.",
+        "x-vistalink-sku-rule": "Reserved when the quote is created: the email fee when the hotel is emailed, 8 call minutes when it may be called. The email fee is charged once, when the hotel's first priced offer arrives by email (never when its first price came on our call); each answered call is charged its talk time rounded up to the minute, at most 8 minutes, when it ends; unanswered calls are free. Whatever is not charged is released when the quote closes. Returning your open quote for the same hotel and stay is free.",
         "x-vistalink-cli": "vistalink quotes create",
         "parameters": [
           {
@@ -1744,7 +1745,7 @@
           "Quotes"
         ],
         "summary": "Cancel a quote",
-        "description": "Synchronous and free; needs the `quotes` scope. Stops further emails to the hotel while the quote is `queued`, `contacting`, `waiting` or `offer_received`; cancelling twice returns the cancelled quote. A quote cancelled before a priced offer costs nothing; one cancelled after keeps its charge. A closed quote answers 409 `conflict`.",
+        "description": "Synchronous and free; needs the `quotes` scope. Stops further emails and calls to the hotel while the quote is `queued`, `contacting`, `waiting`, `calling` or `offer_received`; cancelling twice returns the cancelled quote. A quote cancelled before a priced offer costs nothing but the minutes of a call that was answered; one cancelled after keeps its charge. A closed quote answers 409 `conflict`.",
         "operationId": "cancelQuote",
         "parameters": [
           {
@@ -1853,7 +1854,7 @@
           "Quotes"
         ],
         "summary": "Accept a quote offer",
-        "description": "Free; needs the `quotes` scope and the Build plan or higher (test keys: any plan). Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).",
+        "description": "Free; needs the `quotes` scope and the Build plan or higher (test keys: any plan). Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted` and `handoff` `introduction`; the hotel then confirms the booking with the guest directly. For an offer the hotel gave on the phone when we hold no email address for it, nothing is sent: `handoff` is `voucher` and `voucher` carries what the guest needs to book with the hotel. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay, and `partner_commission_share` your part of it: half on an email offer, none on a phone offer.",
         "operationId": "acceptQuoteOffer",
         "parameters": [
           {
@@ -4420,6 +4421,73 @@
         "title": "BudgetFilter",
         "description": "A price band, matched against each hotel's catalogued room prices rather than live rates."
       },
+      "CanonicalNames": {
+        "properties": {
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine",
+            "description": "Name in the hotel's booking engine."
+          },
+          "site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site",
+            "description": "Name on the hotel's website."
+          },
+          "booking": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Booking",
+            "description": "Name on the third-party channel listing."
+          },
+          "expedia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expedia",
+            "description": "Name on Expedia."
+          },
+          "supplied": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplied",
+            "description": "Name in the rooms you supplied."
+          }
+        },
+        "type": "object",
+        "title": "CanonicalNames",
+        "description": "Every name the room is recorded under, one per source; a source without the room is null."
+      },
       "CanonicalRoom": {
         "properties": {
           "room_id": {
@@ -4477,6 +4545,29 @@
             "type": "array",
             "title": "Bed Config",
             "description": "Beds in the room; empty when no source gives them in a structured form."
+          },
+          "preferred_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Name",
+            "description": "The name we would show for the room: the booking engine's, else the hotel site's, else the third-party channel listing's, else Expedia's; never your supplied name. Omitted when not set."
+          },
+          "names": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalNames"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every name the room is recorded under, by source; omitted when not set."
           }
         },
         "type": "object",
@@ -6589,7 +6680,8 @@
             "provenance": {
               "images_release": "7c1e9a3f-2b4d-4e6a-8f0c-5d9b1a3e7f24",
               "profile_source": "site",
-              "profile_updated_at": "2026-10-07T09:30:00Z"
+              "profile_updated_at": "2026-10-07T09:30:00Z",
+              "room_photos_verified": false
             },
             "rates": {
               "channels": [
@@ -7205,6 +7297,27 @@
         ],
         "title": "JobRef",
         "description": "A reference to a job."
+      },
+      "ListingRef": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Source label of the listing."
+          },
+          "listing_key": {
+            "type": "string",
+            "title": "Listing Key",
+            "description": "The listing's key on that source."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "listing_key"
+        ],
+        "title": "ListingRef",
+        "description": "A listing named by its source and key."
       },
       "LocationFilter": {
         "properties": {
@@ -8233,6 +8346,12 @@
             ],
             "title": "Images Release",
             "description": "Id of the gallery release the image order comes from; null when the images section was not requested or the hotel is not in a release."
+          },
+          "room_photos_verified": {
+            "type": "boolean",
+            "title": "Room Photos Verified",
+            "description": "True when the hotel's room photos come from a verified room-to-photo map: each room shows only photos the source lists for that room, first photo is the cover, and a room without a verified photo has none. False means room photos are best-effort.",
+            "default": false
           }
         },
         "type": "object",
@@ -8264,6 +8383,7 @@
               "queued",
               "contacting",
               "waiting",
+              "calling",
               "offer_received",
               "completed",
               "no_response",
@@ -8273,7 +8393,7 @@
               "accepted"
             ],
             "title": "Status",
-            "description": "Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`."
+            "description": "Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply, or a call is scheduled), `calling` (we are calling the hotel; see `calls`), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`."
           },
           "hotel_id": {
             "type": "string",
@@ -8330,13 +8450,32 @@
             "title": "Updated At",
             "description": "When the quote last changed, RFC 3339 UTC."
           },
+          "channels": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "email",
+              "phone"
+            ],
+            "title": "Channels",
+            "description": "How the hotel is being asked: `email`, `phone`, or `auto` (email first, then a call). It can differ from what you asked for: `auto` runs email-only where calling is not available, and as phone-only when we hold no email address for the hotel.",
+            "default": "email"
+          },
+          "calls": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteCall"
+            },
+            "type": "array",
+            "title": "Calls",
+            "description": "Phone attempts, oldest first; empty for an email-only quote."
+          },
           "offers": {
             "items": {
               "$ref": "#/components/schemas/QuoteOffer"
             },
             "type": "array",
             "title": "Offers",
-            "description": "Priced offers from the hotel's replies, oldest first."
+            "description": "Priced offers from the hotel's replies and calls, oldest first."
           },
           "accepted_offer_id": {
             "anyOf": [
@@ -8360,7 +8499,50 @@
               }
             ],
             "title": "Hotel Commission Applies",
-            "description": "After acceptance: true when the hotel pays a commission on the booking (half of it is yours), false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known."
+            "description": "After acceptance: true when the hotel pays a commission on the booking, false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known. Your part of any commission is `partner_commission_share`."
+          },
+          "partner_commission_share": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "0.5",
+                  "0"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Commission Share",
+            "description": "After acceptance: your share of the hotel's commission on the booking, a decimal string: `0.5` (half) for an offer the hotel sent by email, `0` for an offer it gave on a phone call; null before acceptance."
+          },
+          "handoff": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "introduction",
+                  "voucher"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handoff",
+            "description": "After acceptance: `introduction` when we emailed the hotel with your guest copied; `voucher` when we hold no email address for the hotel (a phone offer), so nothing was sent and you give the guest `voucher` to book with the hotel directly. Null before acceptance."
+          },
+          "voucher": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteVoucher"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `handoff` `voucher`: the details the guest needs; null otherwise."
           },
           "failure_reason": {
             "anyOf": [
@@ -8374,7 +8556,11 @@
                   "invalid_request",
                   "opted_out",
                   "unreachable",
-                  "rejected"
+                  "rejected",
+                  "no_contact",
+                  "no_contact_phone",
+                  "phone_unavailable",
+                  "do_not_call"
                 ]
               },
               {
@@ -8382,12 +8568,12 @@
               }
             ],
             "title": "Failure Reason",
-            "description": "Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable` or `rejected`; null otherwise."
+            "description": "Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable`, `rejected`, or for calls `no_contact` (neither an email address nor a phone number), `no_contact_phone`, `phone_unavailable` or `do_not_call`; null otherwise."
           },
           "billing": {
             "type": "null",
             "title": "Billing",
-            "description": "Always null on responses: the quote fee is charged once, when the hotel's first priced offer arrives, and shows in usage."
+            "description": "Always null on responses: the email fee is charged once, when the hotel's first priced offer arrives by email, and answered call minutes when each call ends; both show in usage and per call in `calls`."
           }
         },
         "type": "object",
@@ -8402,7 +8588,7 @@
           "updated_at"
         ],
         "title": "Quote",
-        "description": "A request for a price quote, emailed to the hotel by VistaLink. Returned by create, get,\ncancel and accept, and as `data` in `quote.updated`.",
+        "description": "A request for a price quote, asked of the hotel by VistaLink by email and/or phone. Returned by create, get,\ncancel and accept, and as `data` in `quote.updated`.",
         "examples": [
           {
             "anchor": {
@@ -8609,6 +8795,74 @@
         "title": "QuoteAnchor",
         "description": "The price the hotel was asked to beat."
       },
+      "QuoteCall": {
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Attempt",
+            "description": "1 for the first call; redials after an unanswered call count up."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "in_progress",
+              "answered",
+              "unanswered"
+            ],
+            "title": "Status",
+            "description": "`scheduled` (see `scheduled_for`), `in_progress`, `answered` (someone at the hotel spoke with us) or `unanswered` (no answer, busy, voicemail or a failed line; free)."
+          },
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For",
+            "description": "When the call is (or was) due, RFC 3339 UTC; null when not known."
+          },
+          "answered_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 8.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered Minutes",
+            "description": "Billed minutes of the answered call (talk time rounded up, at most 8); 0 when unanswered, null until the call ends."
+          },
+          "charged": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Charged",
+            "description": "What this call cost, a decimal string in USD (`0` when unanswered); null until the call ends."
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt",
+          "status"
+        ],
+        "title": "QuoteCall",
+        "description": "One phone attempt on a quote (``channels`` `auto` or `phone`)."
+      },
       "QuoteGuest": {
         "properties": {
           "first_name": {
@@ -8653,9 +8907,12 @@
           },
           "source": {
             "type": "string",
-            "const": "email",
+            "enum": [
+              "email",
+              "phone"
+            ],
             "title": "Source",
-            "description": "Always `email`: the hotel's emailed reply.",
+            "description": "`email` when it came in the hotel's emailed reply, `phone` when the hotel gave it on our call.",
             "default": "email"
           },
           "room_name": {
@@ -8812,7 +9069,7 @@
               }
             ],
             "title": "Evidence",
-            "description": "The sentence of the hotel's reply the price was read from, up to 280 characters."
+            "description": "The sentence of the hotel's reply (or of the call transcript) the price was read from, up to 280 characters."
           },
           "confidence": {
             "anyOf": [
@@ -8842,7 +9099,7 @@
           "currency"
         ],
         "title": "QuoteOffer",
-        "description": "One priced offer the hotel sent by email, read from its reply."
+        "description": "One priced offer from the hotel, read from its emailed reply or from the phone call."
       },
       "QuoteRequest": {
         "properties": {
@@ -8903,6 +9160,17 @@
             "title": "Locale",
             "description": "Language of the email to the hotel, as a language tag such as `en` or `it`; the hotel's own language when omitted."
           },
+          "channels": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "email",
+              "phone"
+            ],
+            "title": "Channels",
+            "description": "How the hotel is asked. `auto` (the default) emails it first and, when it has not answered 12 hours after the email went out, calls it at the next opening-hours window (09:00 to 20:00 hotel time); `email` only emails; `phone` only calls. Calls are made by VistaLink's voice agent, VistaLink-branded and without naming the guest. Where calling is not available yet, `auto` runs email-only and `phone` answers 403 `not_yet_available`.",
+            "default": "auto"
+          },
           "sandbox_outcome": {
             "anyOf": [
               {
@@ -8910,7 +9178,10 @@
                 "enum": [
                   "offer",
                   "declined",
-                  "no_response"
+                  "no_response",
+                  "call_offer",
+                  "call_unanswered",
+                  "call_declined"
                 ]
               },
               {
@@ -8918,7 +9189,7 @@
               }
             ],
             "title": "Sandbox Outcome",
-            "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 on a live key."
+            "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response` by email, or `call_offer`, `call_unanswered` or `call_declined` on a simulated phone call (needs `channels` `auto` or `phone`). Rejected with 400 on a live key."
           }
         },
         "additionalProperties": false,
@@ -9007,6 +9278,142 @@
         ],
         "title": "QuoteStay",
         "description": "The stay a quote asks about."
+      },
+      "QuoteVoucher": {
+        "properties": {
+          "hotel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotel Name",
+            "description": "The hotel's name."
+          },
+          "hotel_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotel Phone",
+            "description": "The hotel's phone number, E.164."
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "The price the hotel gave on the call."
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "description": "ISO 4217 currency of `total`."
+          },
+          "room_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Name",
+            "description": "Room the hotel offered."
+          },
+          "rate_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Name",
+            "description": "Short summary of the terms."
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "breakfast",
+                  "half",
+                  "full",
+                  "all_inclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board",
+            "description": "Meals included, or null when not said."
+          },
+          "free_cancellation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Cancellation",
+            "description": "Free cancellation, or null when not said."
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference",
+            "description": "The reference to quote to the hotel (the quote id)."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Anything else the hotel said that the guest should know."
+          }
+        },
+        "type": "object",
+        "title": "QuoteVoucher",
+        "description": "What the guest needs to book a PHONE offer directly when we hold no email address for the hotel."
       },
       "QuoteWants": {
         "properties": {
@@ -9175,6 +9582,101 @@
         ],
         "title": "RateChannel",
         "description": "Prices from one channel for the requested stay."
+      },
+      "RateJoin": {
+        "properties": {
+          "adapter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adapter",
+            "description": "The rate adapter that reads this engine."
+          },
+          "property_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatePropertyKey"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The engine's id for the hotel; null when the engine has none."
+          },
+          "room_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Code",
+            "description": "The engine's code for this room, compared as an exact string; null when the engine has none."
+          },
+          "room_code_namespace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Code Namespace",
+            "description": "Which code space `room_code` is in, for example `travelclick_be5_roomtypeid`."
+          },
+          "rate_plan_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rate Plan Ids",
+            "description": "Rate plan ids the engine lists for this room; may be empty."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Notes carried verbatim from the engine catalogue."
+          }
+        },
+        "type": "object",
+        "title": "RateJoin",
+        "description": "How rates from the hotel's booking engine attach to this room: the engine room code they carry."
+      },
+      "RatePropertyKey": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Parameter name, for example `hotelId`."
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Its value for this hotel, for example `110598`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "RatePropertyKey",
+        "description": "The engine's property identifier, as the rate adapter names it."
       },
       "RateResult": {
         "properties": {
@@ -9685,6 +10187,95 @@
         "title": "RatesSummary",
         "description": "How many results ended in each status."
       },
+      "ReconcileCatalogue": {
+        "properties": {
+          "result_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Id",
+            "description": "Id of the catalogue build; null before it is registered."
+          },
+          "built_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At",
+            "description": "When the build was made, RFC 3339 UTC."
+          },
+          "cascade_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cascade Version",
+            "description": "Version of the matching pipeline that built it."
+          },
+          "conf_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conf Version",
+            "description": "Version of the confidence model, for example `conf-v0`."
+          },
+          "gate_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate Passed",
+            "description": "True when that confidence model passed its accuracy gate; while false, reported confidences are capped at 0.79."
+          },
+          "registry_watermark": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Watermark",
+            "description": "Opaque marker of the catalogue registry state the build was served at."
+          },
+          "lease_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Until",
+            "description": "Until when the build may be served, RFC 3339 UTC; after it the service falls back to matching on the fly. Null when no bound is set."
+          }
+        },
+        "type": "object",
+        "title": "ReconcileCatalogue",
+        "description": "Which stored catalogue build answered."
+      },
       "ReconcileConflict": {
         "properties": {
           "field": {
@@ -9707,12 +10298,190 @@
         "title": "ReconcileConflict",
         "description": "A fact the matched listings disagree on."
       },
+      "ReconcileEngine": {
+        "properties": {
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine",
+            "description": "Booking engine, for example `travelclick` or `marriott`."
+          },
+          "engine_row_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Row Id",
+            "description": "Id of the room in our engine catalogue."
+          },
+          "sale_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sold_direct",
+                  "configured_not_sold_direct",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Status",
+            "description": "`sold_direct` when the engine sells the room, `configured_not_sold_direct` when it is set up but not on sale, `unknown` otherwise."
+          },
+          "is_package": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Package",
+            "description": "True when the engine product is a package (room plus extras), not a plain room."
+          },
+          "single_use_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Single Use Of",
+            "description": "For a single-use product: `engine_row_id` of the room it is sold from; null otherwise."
+          },
+          "rate_join": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RateJoin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How rates attach to this room; null when the engine gives no code."
+          }
+        },
+        "type": "object",
+        "title": "ReconcileEngine",
+        "description": "The hotel's booking-engine record behind a listing."
+      },
+      "ReconcileEngineProduct": {
+        "properties": {
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine",
+            "description": "Booking engine, for example `travelclick` or `marriott`."
+          },
+          "engine_row_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Row Id",
+            "description": "Id of the room in our engine catalogue."
+          },
+          "sale_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sold_direct",
+                  "configured_not_sold_direct",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Status",
+            "description": "`sold_direct` when the engine sells the room, `configured_not_sold_direct` when it is set up but not on sale, `unknown` otherwise."
+          },
+          "is_package": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Package",
+            "description": "True when the engine product is a package (room plus extras), not a plain room."
+          },
+          "single_use_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Single Use Of",
+            "description": "For a single-use product: `engine_row_id` of the room it is sold from; null otherwise."
+          },
+          "rate_join": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RateJoin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How rates attach to this room; null when the engine gives no code."
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Product name in the engine."
+          }
+        },
+        "type": "object",
+        "title": "ReconcileEngineProduct",
+        "description": "One engine product sold as this room, verbatim from the engine catalogue."
+      },
       "ReconcileListing": {
         "properties": {
           "source": {
             "type": "string",
             "title": "Source",
-            "description": "Source label: `booking`, `site`, `expedia`, or the `label` of rooms you supplied."
+            "description": "Source label: `booking`, `site`, `expedia`, `engine` (the hotel's booking engine, which comes with its site), or the `label` of rooms you supplied."
           },
           "name": {
             "anyOf": [
@@ -9750,6 +10519,106 @@
             ],
             "title": "Url",
             "description": "Page of the listing, or the source URL you sent; null when neither is known."
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "same"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation",
+            "description": "Always `same` when reported: the listing is this room. Other relations between listings are in the result's `related`."
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "catalogue:d3",
+                  "catalogue:qwen",
+                  "catalogue:v8",
+                  "catalogue:deterministic",
+                  "catalogue:fable_teacher",
+                  "catalogue:assistant_verified",
+                  "prematch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By",
+            "description": "What placed the listing in this room: `catalogue:<method>` when it came from the stored room catalogue (`deterministic` for an exact engine link, `d3`, `qwen` or `v8` for a model, `fable_teacher` or `assistant_verified` for a reviewed label), `prematch` when matched on the fly. Omitted when not set."
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Confidence from 0 to 1 that this listing belongs to the room; omitted while confidence is uncalibrated or when not set."
+          },
+          "verified": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner",
+                  "assistant",
+                  "fable_teacher"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified",
+            "description": "Who reviewed this membership: `owner` (a person on our side), `assistant` or `fable_teacher` (model reviewers); omitted when it was not reviewed."
+          },
+          "model_disagrees_with_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Disagrees With Verified",
+            "description": "True when the matching model disagrees with the reviewed label; omitted until model scores exist or when the membership was not reviewed."
+          },
+          "identity_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Sha256",
+            "description": "SHA-256 of the listing's identity-relevant facts when the catalogue was built; a listing whose facts have changed since no longer counts as this room. Omitted when not set."
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileEngine"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a booking-engine listing, the engine record behind it; omitted otherwise."
           }
         },
         "type": "object",
@@ -9926,6 +10795,69 @@
             "title": "Shared",
             "description": "Listings that sell several rooms under one name."
           },
+          "source_status": {
+            "items": {
+              "$ref": "#/components/schemas/SourceStatus"
+            },
+            "type": "array",
+            "title": "Source Status",
+            "description": "One entry per source you sent, in order. An `unsupported` source added no listings; its label still appears in `unmatched` with an empty list."
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "catalogue",
+                  "catalogue+prematch",
+                  "prematch_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage",
+            "description": "How the result was made: `catalogue` (from the stored room catalogue), `catalogue+prematch` (catalogue plus listings matched on the fly) or `prematch_only` (matched on the fly). Omitted when not set."
+          },
+          "catalogue_pending": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalogue Pending",
+            "description": "True when the hotel is queued for a catalogue build (not covered yet, or stale); ask again later for a catalogue answer. Omitted when not set."
+          },
+          "catalogue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileCatalogue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which stored catalogue build answered; omitted for `prematch_only` or when not set."
+          },
+          "related": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RelatedListing"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related",
+            "description": "Relations between listings that are not the same room, such as a shared listing that covers another or a package offered for a room; omitted when not set."
+          },
           "billing": {
             "anyOf": [
               {
@@ -9947,64 +10879,211 @@
         "description": "Result of `POST /v2/rooms/reconcile`: the response body when synchronous, the job\n`result` otherwise.",
         "examples": [
           {
-            "billing": {
-              "amount": "0.25",
-              "currency": "USD",
-              "sku": "rooms.reconcile.urls",
-              "units": 1
-            },
             "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
             "reconciliation_id": "rec_9b2e4c7a1f3d5e8b0c6a2d4f",
+            "version": "reconcile-v1.1+cascade-49a6dc68cee0",
+            "coverage": "catalogue",
+            "catalogue_pending": false,
+            "catalogue": {
+              "result_id": null,
+              "built_at": "2026-10-16T11:11:15Z",
+              "cascade_version": "recon-wave-20261016+union-435970727",
+              "conf_version": "conf-v0",
+              "gate_passed": false,
+              "registry_watermark": null,
+              "lease_until": null
+            },
             "rooms": [
               {
-                "basis": [
-                  "name_similarity:0.81",
-                  "size_match",
-                  "image_similarity:0.88"
-                ],
                 "canonical": {
+                  "room_id": "81d1c041-0686-5075-b5cc-a5329e181a4a",
+                  "name": "Marriott Suite",
+                  "size_m2": 62.0,
+                  "occupancy": 3,
                   "bed_config": [
                     {
-                      "count": 1,
-                      "type": "king"
+                      "type": "king",
+                      "count": 1
                     }
                   ],
-                  "name": "Superior Room",
-                  "occupancy": 2,
-                  "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
-                  "size_m2": 28
-                },
-                "confidence": 0.93,
-                "conflicts": [
-                  {
-                    "field": "size_m2",
-                    "values": {
-                      "partner_pms": 28,
-                      "site": 30
-                    }
+                  "preferred_name": "Marriott Suite",
+                  "names": {
+                    "engine": "Marriott Suite",
+                    "site": "Marriott Suite"
                   }
-                ],
+                },
                 "listings": [
                   {
-                    "listing_key": "site:superior",
-                    "name": "Superior Double Room",
-                    "source": "site",
-                    "url": "https://umilta36.com/rooms/superior"
+                    "source": "engine",
+                    "name": "Marriott Suite",
+                    "listing_key": "SUIT",
+                    "url": null,
+                    "relation": "same",
+                    "decided_by": "catalogue:deterministic",
+                    "confidence": null,
+                    "verified": null,
+                    "model_disagrees_with_verified": null,
+                    "identity_sha256": "8e15c89f21ce782b018a239953b64356df78766b45590062b4589d2e9e3308bf",
+                    "engine": {
+                      "engine": "marriott",
+                      "engine_row_id": "SUIT",
+                      "sale_status": "unknown",
+                      "is_package": false,
+                      "single_use_of": null,
+                      "rate_join": {
+                        "adapter": "booking-automation src/providers/marriott",
+                        "property_key": {
+                          "name": "propertyCode",
+                          "value": "STVMC"
+                        },
+                        "room_code": "SUIT",
+                        "room_code_namespace": "marriott_room_type_code",
+                        "rate_plan_ids": [],
+                        "notes": "Room code taken from the engine catalogue; no rate plan ids held."
+                      }
+                    }
                   },
                   {
-                    "listing_key": "SUP-K",
-                    "name": "Superior King",
-                    "source": "partner_pms"
+                    "source": "site",
+                    "name": "Marriott Suite",
+                    "listing_key": "marriott suite",
+                    "url": null,
+                    "relation": "same",
+                    "decided_by": "catalogue:deterministic",
+                    "confidence": null,
+                    "verified": null,
+                    "model_disagrees_with_verified": null,
+                    "identity_sha256": "686c911632dc82dbc8965d74dda938e9b03e84ba5a35b4eaa7e0b685c5a377e0"
                   }
+                ],
+                "confidence": null,
+                "confidence_status": "uncalibrated",
+                "seen_in_training": null,
+                "basis": [
+                  "confidence:uncalibrated",
+                  "decided_by:catalogue:deterministic",
+                  "engine_link:exact",
+                  "name_exact"
+                ],
+                "conflicts": [],
+                "room_type_id": "81d1c041-0686-5075-b5cc-a5329e181a4a",
+                "cluster_id": "cl:1ebd723f:01e88361d2",
+                "coverage": "multi_source",
+                "sale_status": null,
+                "engine_products": [
+                  {
+                    "engine": "marriott",
+                    "engine_row_id": "SUIT",
+                    "sale_status": "unknown",
+                    "is_package": false,
+                    "single_use_of": null,
+                    "rate_join": {
+                      "adapter": "booking-automation src/providers/marriott",
+                      "property_key": {
+                        "name": "propertyCode",
+                        "value": "STVMC"
+                      },
+                      "room_code": "SUIT",
+                      "room_code_namespace": "marriott_room_type_code",
+                      "rate_plan_ids": [],
+                      "notes": "Room code taken from the engine catalogue; no rate plan ids held."
+                    },
+                    "name": "Marriott Suite"
+                  }
+                ],
+                "conflicts_extended": []
+              }
+            ],
+            "unmatched": {
+              "booking": [],
+              "site": [
+                {
+                  "source": "site",
+                  "name": "All of our hotel accommodations",
+                  "listing_key": "all of our hotel accommodations",
+                  "url": null,
+                  "nearest": {
+                    "source": "booking",
+                    "name": "Deluxe Guest room, 1 King, River view",
+                    "confidence": null,
+                    "ambiguous": true
+                  },
+                  "relation_hint": "unresolved_candidate",
+                  "room_type_id": "701dd477-e46b-5809-98ce-e458bd95bc17",
+                  "cluster_id": "cl:1ebd723f:1b782ba8e6",
+                  "coverage": "site_only"
+                }
+              ],
+              "engine": [
+                {
+                  "source": "engine",
+                  "name": "Deluxe Guest room",
+                  "listing_key": "CKNG",
+                  "url": null,
+                  "sale_status": "unknown",
+                  "engine": {
+                    "engine": "marriott",
+                    "engine_row_id": "CKNG",
+                    "sale_status": "unknown",
+                    "is_package": false,
+                    "single_use_of": null,
+                    "rate_join": {
+                      "adapter": "booking-automation src/providers/marriott",
+                      "property_key": {
+                        "name": "propertyCode",
+                        "value": "STVMC"
+                      },
+                      "room_code": "CKNG",
+                      "room_code_namespace": "marriott_room_type_code",
+                      "rate_plan_ids": [],
+                      "notes": "Room code taken from the engine catalogue; no rate plan ids held."
+                    }
+                  },
+                  "room_type_id": "322ba314-46b1-5ec7-a087-35fd8a2f94d0",
+                  "cluster_id": "cl:1ebd723f:edb300666d",
+                  "coverage": "engine_only"
+                }
+              ]
+            },
+            "shared": [],
+            "related": [
+              {
+                "from": {
+                  "source": "site",
+                  "listing_key": "all of our hotel accommodations"
+                },
+                "relation": "unresolved_candidate",
+                "to": {
+                  "source": "booking",
+                  "listing_key": "room_type:7471321"
+                },
+                "confidence": null,
+                "basis": [
+                  "cascade:fable_teacher:0.600",
+                  "flag:v8_not_run_labels_decide"
                 ]
               }
             ],
-            "shared": [],
-            "unmatched": {
-              "partner_pms": [],
-              "site": []
-            },
-            "version": "reconcile-v1.0"
+            "source_status": [
+              {
+                "input": 0,
+                "kind": "booking_url",
+                "label": "booking",
+                "status": "ok"
+              },
+              {
+                "input": 1,
+                "kind": "website_url",
+                "label": "site",
+                "status": "ok"
+              }
+            ],
+            "billing": {
+              "sku": "rooms.reconcile.urls",
+              "units": 1,
+              "amount": "0.25",
+              "currency": "USD"
+            }
           }
         ]
       },
@@ -10023,9 +11102,45 @@
             "description": "Every listing of this room, one or more per source."
           },
           "confidence": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Confidence",
-            "description": "Confidence of the match from 0 to 1."
+            "description": "Confidence of the match from 0 to 1; null until calibrated: a room from the stored catalogue has no calibrated score yet, and its `confidence_status` says why."
+          },
+          "confidence_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "uncalibrated",
+                  "illustrative",
+                  "calibrated"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Status",
+            "description": "What `confidence` is: `uncalibrated` (null, no calibrated score yet), `illustrative` (a placeholder score, not a measured probability) or `calibrated`. Omitted when not set."
+          },
+          "seen_in_training": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seen In Training",
+            "description": "True when this hotel was in the data the confidence model was fitted on; omitted until `confidence` is calibrated."
           },
           "basis": {
             "items": {
@@ -10042,6 +11157,95 @@
             "type": "array",
             "title": "Conflicts",
             "description": "Facts the listings disagree on."
+          },
+          "room_type_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Type Id",
+            "description": "Stable catalogue id (a UUID) of the physical room type; omitted when not set."
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id",
+            "description": "Id of the room's group in the catalogue build; omitted when not set."
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "multi_source",
+                  "engine_only",
+                  "site_only",
+                  "booking_only",
+                  "expedia_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage",
+            "description": "`multi_source` for a room in `rooms`; omitted when not set."
+          },
+          "sale_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sold_direct",
+                  "configured_not_sold_direct"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Status",
+            "description": "`sold_direct` when the hotel's booking engine sells any product of this room, `configured_not_sold_direct` when every one is set up but not on sale; omitted without engine products or when not set."
+          },
+          "engine_products": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReconcileEngineProduct"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Products",
+            "description": "One entry per booking-engine listing in the room, verbatim from the engine catalogue, with how rates attach; empty when the room has none, omitted when not set."
+          },
+          "conflicts_extended": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReconcileConflict"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflicts Extended",
+            "description": "Disagreements on facts outside the three in `conflicts` (same shape), such as `name`, `bathroom`, `occupancy` against the engine, or `sale_status`; omitted when not set."
           }
         },
         "type": "object",
@@ -10051,6 +11255,60 @@
         ],
         "title": "ReconciledRoom",
         "description": "One room matched across sources."
+      },
+      "RelatedListing": {
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/ListingRef",
+            "description": "The listing the relation starts from."
+          },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "covers",
+              "unit_of",
+              "offer_for",
+              "name_match_candidate",
+              "same_not_merged",
+              "ambiguous_name_match",
+              "unresolved_candidate"
+            ],
+            "title": "Relation",
+            "description": "`covers` (one listing sells the other under a shared name), `unit_of`, `offer_for` (a package or rate of the other room), `name_match_candidate`, `same_not_merged` (alike but kept apart because facts contradict), `ambiguous_name_match` or `unresolved_candidate` (a possible match left undecided)."
+          },
+          "to": {
+            "$ref": "#/components/schemas/ListingRef",
+            "description": "The listing the relation points to."
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Confidence from 0 to 1; null while confidence is uncalibrated."
+          },
+          "basis": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Basis",
+            "description": "Evidence the relation rests on."
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "relation",
+          "to"
+        ],
+        "title": "RelatedListing",
+        "description": "A directed relation between two listings that are not the same room."
       },
       "ResolveRequest": {
         "properties": {
@@ -11652,6 +12910,55 @@
         "title": "SharedListing",
         "description": "A listing that sells several rooms of another source under one name, such as `Double or\nTwin`."
       },
+      "SourceStatus": {
+        "properties": {
+          "input": {
+            "type": "integer",
+            "title": "Input",
+            "description": "Position of the source in the request's `sources`, from 0."
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "The source's `kind` as sent: `booking_url`, `website_url`, `expedia_url` or `rooms`."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Label its listings use in `rooms` and `unmatched`."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unsupported"
+            ],
+            "title": "Status",
+            "description": "`ok` when its rooms were matched; `unsupported` when we cannot read this source yet."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why it is `unsupported`, for example `expedia_not_ingested`; null when `ok`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "input",
+          "kind",
+          "label",
+          "status"
+        ],
+        "title": "SourceStatus",
+        "description": "Whether one input source could be matched."
+      },
       "Stay": {
         "properties": {
           "check_in": {
@@ -11838,7 +13145,7 @@
           "source": {
             "type": "string",
             "title": "Source",
-            "description": "Source label: `booking`, `site`, `expedia`, or the `label` of rooms you supplied."
+            "description": "Source label: `booking`, `site`, `expedia`, `engine` (the hotel's booking engine, which comes with its site), or the `label` of rooms you supplied."
           },
           "name": {
             "anyOf": [
@@ -11887,6 +13194,104 @@
               }
             ],
             "description": "The closest candidate it had; null when there was none."
+          },
+          "relation_hint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "abstained_same",
+                  "offer_for",
+                  "unit_of",
+                  "covered_by",
+                  "covers",
+                  "has_unit",
+                  "has_offer",
+                  "name_match_candidate",
+                  "same_not_merged",
+                  "ambiguous_name_match",
+                  "unresolved_candidate",
+                  "single_use_of",
+                  "has_single_use"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation Hint",
+            "description": "How the listing relates to another listing without being the same room, for example `covered_by` (sold under a shared listing), `offer_for` (a package of another room), `unit_of`, `single_use_of` or `unresolved_candidate` (a possible match left undecided). The edges themselves are in `related`. Omitted when there is none or it was not set."
+          },
+          "sale_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sold_direct",
+                  "configured_not_sold_direct",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Status",
+            "description": "For a booking-engine listing: `sold_direct`, `configured_not_sold_direct` or `unknown`."
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileEngine"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a booking-engine listing, the engine record behind it; omitted otherwise."
+          },
+          "room_type_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Type Id",
+            "description": "Stable catalogue id (a UUID) of the room type this listing alone represents; omitted when not set."
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id",
+            "description": "Id of the listing's group in the catalogue build; omitted when not set."
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "multi_source",
+                  "engine_only",
+                  "site_only",
+                  "booking_only",
+                  "expedia_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage",
+            "description": "Which source the room is known from alone: `engine_only`, `site_only`, `booking_only` or `expedia_only`. Omitted when not set."
           }
         },
         "type": "object",
@@ -11906,7 +13311,7 @@
               "expedia_url"
             ],
             "title": "Kind",
-            "description": "`booking_url` (third-party channel listing), `website_url` (the hotel's website) or `expedia_url`; their listings appear under the labels `booking`, `site` and `expedia`."
+            "description": "`booking_url` (third-party channel listing), `website_url` (the hotel's website) or `expedia_url`; their listings appear under the labels `booking`, `site` and `expedia`. `expedia_url` is accepted but not matched yet: until Expedia listings are ingested it comes back in `source_status` as `unsupported` (`expedia_not_ingested`), adds no listings."
           },
           "url": {
             "type": "string",

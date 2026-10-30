@@ -556,10 +556,16 @@ export const OPERATIONS: Operation[] = [
         "description": "Language of the email to the hotel, as a language tag such as `en` or `it`; the hotel's own language when omitted."
       },
       {
+        "name": "channels",
+        "kind": "string",
+        "required": false,
+        "description": "How the hotel is asked. `auto` (the default) emails it first and, when it has not answered 12 hours after the email went"
+      },
+      {
         "name": "sandbox_outcome",
         "kind": "string",
         "required": false,
-        "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 o"
+        "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response` by email, or `call_o"
       }
     ],
     "idempotent": true,
