@@ -75,7 +75,7 @@ export interface paths {
         put?: never;
         /**
          * Rates for a stay
-         * @description Needs the `rates` scope. `freshness: cached` is synchronous and bills `rates.direct.cached` for each hotel that comes back `observed`, or `stale` within `max_age_hours`; `freshness: live` answers 202 with a `rates.live` job, needs the Build plan or higher, and bills `rates.direct.live` for each hotel it observes. `channel: third_party` is Enterprise-only (403 `forbidden`, `details.reason: enterprise_only` otherwise). Honours `Idempotency-Key` when it creates a job.
+         * @description Needs the `rates` scope. `freshness: cached` is synchronous and bills `rates.direct.cached` for each hotel that comes back `observed`, or `stale` within `max_age_hours`; `freshness: live` answers 202 with a `rates.live` job, needs the Build plan or higher, and bills `rates.direct.live` for each hotel it observes. `channel: third_party` is Enterprise-only (403 `forbidden`, `details.reason: enterprise_only` otherwise). Honours `Idempotency-Key` when it creates a job. The 202 carries `Retry-After`; read the job with `GET /v2/jobs/{job_id}?wait=25` to get the result in one request instead of polling.
          */
         post: operations["getRates"];
         delete?: never;
@@ -95,7 +95,7 @@ export interface paths {
         put?: never;
         /**
          * Rates for many hotels and stays
-         * @description Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher (a Free plan's test key may try `freshness: cached` with up to 25 hotels and 1 stay). Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when the batch has 1,000 hotels or more. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.
+         * @description Always a job: answers 202 with a `rates.batch` job; needs the `rates` scope and the Build plan or higher (a Free plan's test key may try `freshness: cached` with up to 25 hotels and 1 stay). Billed at the `POST /v2/rates` unit prices for each hotel and stay that comes back priced, 25% off when at least 1,000 different hotels resolve. Identical stays (including room occupancy) for the same hotel are billed once. Submission needs credit for the undiscounted input hotel × stay matrix; unused credit is released at settlement. The result is NDJSON at `result_url`, one line per hotel and stay in the `results[]` shape of `POST /v2/rates` with its `stay` dates and zero-based `stay_index` into the request's `stays[]`, plus a `summary`. The 10 cheapest available offers of each line can be booked with `POST /v2/bookings` for 30 minutes; re-quote any other offer with `POST /v2/rates`. Honours `Idempotency-Key`.
          */
         post: operations["batchRates"];
         delete?: never;
@@ -235,7 +235,7 @@ export interface paths {
         put?: never;
         /**
          * Request a quote from a hotel
-         * @description Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. Costs $0.25 per quote the hotel answers with a price, charged once when the first priced offer arrives (reserved from your credit now, released when the quote closes without one); nothing when the hotel declines or does not reply. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email anyone and cost nothing, on every plan, Free included: a simulated hotel answers within seconds, as `sandbox_outcome` says.
+         * @description Answers 202 with the Quote; VistaLink then emails the hotel, from its own address and on behalf of a guest it does not name, for a direct price on the stay. Most hotels reply within 6 hours, some take a day: poll GET /v2/quotes/{quote_id} or subscribe to `quote.updated`. With `channels` `auto` (the default) a hotel that has not answered 12 hours after the email is called at its next opening-hours window by VistaLink's voice agent (VistaLink-branded, the guest is not named); `phone` only calls; `email` only emails. Where calling is not available yet, `auto` runs email-only and `phone` answers 403 `not_yet_available`. Costs $0.25 per quote the hotel answers with a price by email, charged once when the first priced offer arrives; nothing when the hotel declines or does not reply. Calls (`channels` `auto` or `phone`) cost $0.20 per answered minute, talk time rounded up and at most 8 minutes a call; unanswered calls are free, and the $0.25 is not charged when the hotel's first price came on our call. Both are reserved from your credit now ($0.25 when the hotel may be emailed, $1.60 when it may be called) and whatever is not charged is released when the quote closes. Needs the `quotes` scope, the Build plan or higher and an `Idempotency-Key`. Test keys never email or call anyone and cost nothing, on every plan, Free included: a simulated hotel answers within seconds, as `sandbox_outcome` says.
          */
         post: operations["createQuote"];
         delete?: never;
@@ -275,7 +275,7 @@ export interface paths {
         put?: never;
         /**
          * Cancel a quote
-         * @description Synchronous and free; needs the `quotes` scope. Stops further emails to the hotel while the quote is `queued`, `contacting`, `waiting` or `offer_received`; cancelling twice returns the cancelled quote. A quote cancelled before a priced offer costs nothing; one cancelled after keeps its charge. A closed quote answers 409 `conflict`.
+         * @description Synchronous and free; needs the `quotes` scope. Stops further emails and calls to the hotel while the quote is `queued`, `contacting`, `waiting`, `calling` or `offer_received`; cancelling twice returns the cancelled quote. A quote cancelled before a priced offer costs nothing but the minutes of a call that was answered; one cancelled after keeps its charge. A closed quote answers 409 `conflict`.
          */
         post: operations["cancelQuote"];
         delete?: never;
@@ -295,7 +295,7 @@ export interface paths {
         put?: never;
         /**
          * Accept a quote offer
-         * @description Free; needs the `quotes` scope and the Build plan or higher (test keys: any plan). Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted`; the hotel then confirms the booking with the guest directly. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay (half of it is yours).
+         * @description Free; needs the `quotes` scope and the Build plan or higher (test keys: any plan). Sends the hotel one introduction email with your guest copied, on the same thread as the quote, and answers with the Quote in status `accepted` and `handoff` `introduction`; the hotel then confirms the booking with the guest directly. For an offer the hotel gave on the phone when we hold no email address for it, nothing is sent: `handoff` is `voucher` and `voucher` carries what the guest needs to book with the hotel. Allowed while the quote is `offer_received` or `completed`. Repeating the same accept returns the accepted quote. `hotel_commission_applies` says whether the hotel pays a commission on the stay, and `partner_commission_share` your part of it: half on an email offer, none on a phone offer.
          */
         post: operations["acceptQuoteOffer"];
         delete?: never;
@@ -313,7 +313,7 @@ export interface paths {
         };
         /**
          * Get a job
-         * @description Synchronous and free; any key with at least one scope can read its own jobs. Poll until `status` is `succeeded`, `failed` or `canceled`; jobs expire 7 days after creation.
+         * @description Synchronous and free; any key with at least one scope can read its own jobs. Poll until `status` is `succeeded`, `failed` or `canceled`; jobs expire 7 days after creation. Pass `wait` to hold the answer until the job finishes: one waited request replaces a polling loop and counts once against the rate limit. While the job is not finished the response carries `Retry-After` (seconds until the next read is worth making).
          */
         get: operations["getJob"];
         put?: never;
@@ -788,12 +788,34 @@ export interface components {
          *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
          *       "offer": {
          *         "availability": "available",
+         *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_penalties": [
+         *           {
+         *             "nights": 1,
+         *             "starts_at": "2026-11-12T17:00:00Z",
+         *             "starts_local": "2026-11-12T18:00:00"
+         *           }
+         *         ],
+         *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *         "cancellation_type": "free",
          *         "channel": "direct",
          *         "currency": "EUR",
          *         "engine": "SYNXIS",
          *         "excluded_charges": [],
-         *         "free_cancellation": false,
+         *         "fee_total": "16.00",
+         *         "fees": [
+         *           {
+         *             "amount": "16.00",
+         *             "code": "CITY",
+         *             "name": "City tax"
+         *           }
+         *         ],
+         *         "free_cancellation": true,
+         *         "guarantee_required": true,
+         *         "hotel_timezone": "Europe/Rome",
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
          *         "member_rate": false,
@@ -804,9 +826,20 @@ export interface components {
          *           "children_ages": []
          *         },
          *         "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *         "rate_name": "Non-refundable, breakfast included",
+         *         "payment": "pay_at_hotel",
+         *         "rate_name": "Flexible rate, breakfast included",
+         *         "rate_plan_code": "FLEXBB",
          *         "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *         "room_name": "Superior Room",
+         *         "rooms_left": 3,
+         *         "tax_total": "86.00",
+         *         "taxes": [
+         *           {
+         *             "amount": "86.00",
+         *             "code": "VAT",
+         *             "name": "VAT 10%"
+         *           }
+         *         ],
          *         "total": "962.00",
          *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *       },
@@ -837,12 +870,34 @@ export interface components {
          *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
          *       "offer": {
          *         "availability": "available",
+         *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_penalties": [
+         *           {
+         *             "nights": 1,
+         *             "starts_at": "2026-11-12T17:00:00Z",
+         *             "starts_local": "2026-11-12T18:00:00"
+         *           }
+         *         ],
+         *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *         "cancellation_type": "free",
          *         "channel": "direct",
          *         "currency": "EUR",
          *         "engine": "SYNXIS",
          *         "excluded_charges": [],
-         *         "free_cancellation": false,
+         *         "fee_total": "16.00",
+         *         "fees": [
+         *           {
+         *             "amount": "16.00",
+         *             "code": "CITY",
+         *             "name": "City tax"
+         *           }
+         *         ],
+         *         "free_cancellation": true,
+         *         "guarantee_required": true,
+         *         "hotel_timezone": "Europe/Rome",
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
          *         "member_rate": false,
@@ -853,9 +908,20 @@ export interface components {
          *           "children_ages": []
          *         },
          *         "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *         "rate_name": "Non-refundable, breakfast included",
+         *         "payment": "pay_at_hotel",
+         *         "rate_name": "Flexible rate, breakfast included",
+         *         "rate_plan_code": "FLEXBB",
          *         "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *         "room_name": "Superior Room",
+         *         "rooms_left": 3,
+         *         "tax_total": "86.00",
+         *         "taxes": [
+         *           {
+         *             "amount": "86.00",
+         *             "code": "VAT",
+         *             "name": "VAT 10%"
+         *           }
+         *         ],
          *         "total": "962.00",
          *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *       },
@@ -905,12 +971,34 @@ export interface components {
          *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
          *       "offer": {
          *         "availability": "available",
+         *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_penalties": [
+         *           {
+         *             "nights": 1,
+         *             "starts_at": "2026-11-12T17:00:00Z",
+         *             "starts_local": "2026-11-12T18:00:00"
+         *           }
+         *         ],
+         *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *         "cancellation_type": "free",
          *         "channel": "direct",
          *         "currency": "EUR",
          *         "engine": "SYNXIS",
          *         "excluded_charges": [],
-         *         "free_cancellation": false,
+         *         "fee_total": "16.00",
+         *         "fees": [
+         *           {
+         *             "amount": "16.00",
+         *             "code": "CITY",
+         *             "name": "City tax"
+         *           }
+         *         ],
+         *         "free_cancellation": true,
+         *         "guarantee_required": true,
+         *         "hotel_timezone": "Europe/Rome",
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
          *         "member_rate": false,
@@ -921,9 +1009,20 @@ export interface components {
          *           "children_ages": []
          *         },
          *         "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *         "rate_name": "Non-refundable, breakfast included",
+         *         "payment": "pay_at_hotel",
+         *         "rate_name": "Flexible rate, breakfast included",
+         *         "rate_plan_code": "FLEXBB",
          *         "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *         "room_name": "Superior Room",
+         *         "rooms_left": 3,
+         *         "tax_total": "86.00",
+         *         "taxes": [
+         *           {
+         *             "amount": "86.00",
+         *             "code": "VAT",
+         *             "name": "VAT 10%"
+         *           }
+         *         ],
          *         "total": "962.00",
          *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *       },
@@ -980,12 +1079,34 @@ export interface components {
          *       },
          *       "offer": {
          *         "availability": "available",
+         *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_penalties": [
+         *           {
+         *             "nights": 1,
+         *             "starts_at": "2026-11-12T17:00:00Z",
+         *             "starts_local": "2026-11-12T18:00:00"
+         *           }
+         *         ],
+         *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *         "cancellation_type": "free",
          *         "channel": "direct",
          *         "currency": "EUR",
          *         "engine": "SYNXIS",
          *         "excluded_charges": [],
-         *         "free_cancellation": false,
+         *         "fee_total": "16.00",
+         *         "fees": [
+         *           {
+         *             "amount": "16.00",
+         *             "code": "CITY",
+         *             "name": "City tax"
+         *           }
+         *         ],
+         *         "free_cancellation": true,
+         *         "guarantee_required": true,
+         *         "hotel_timezone": "Europe/Rome",
          *         "includes_taxes": true,
          *         "listing_key": "engine_room:1234567",
          *         "member_rate": false,
@@ -996,9 +1117,20 @@ export interface components {
          *           "children_ages": []
          *         },
          *         "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *         "rate_name": "Non-refundable, breakfast included",
+         *         "payment": "pay_at_hotel",
+         *         "rate_name": "Flexible rate, breakfast included",
+         *         "rate_plan_code": "FLEXBB",
          *         "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *         "room_name": "Superior Room",
+         *         "rooms_left": 3,
+         *         "tax_total": "86.00",
+         *         "taxes": [
+         *           {
+         *             "amount": "86.00",
+         *             "code": "VAT",
+         *             "name": "VAT 10%"
+         *           }
+         *         ],
          *         "total": "962.00",
          *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *       },
@@ -1480,6 +1612,83 @@ export interface components {
             basis?: "per_room_per_night";
         };
         /**
+         * CancellationPenalty
+         * @description One charge the source states for cancelling, and from when it applies.
+         */
+        CancellationPenalty: {
+            /**
+             * Starts At
+             * @description Moment from which this charge applies, RFC 3339; null when the source gave no moment that resolves to an instant, or when the charge applies from booking.
+             */
+            starts_at?: string | null;
+            /**
+             * Starts Local
+             * @description The same moment on the hotel's clock, `YYYY-MM-DDTHH:MM:SS`, or `YYYY-MM-DD` when the source named only a day; null when the source gave none.
+             */
+            starts_local?: string | null;
+            /**
+             * Days Before Arrival
+             * @description The source's own rule in whole days before arrival; null when it states none.
+             */
+            days_before_arrival?: number | null;
+            /**
+             * Percent
+             * @description Share charged, 0 to 100, of what `percent_of` names; null when the charge is not a percentage.
+             */
+            percent?: number | null;
+            /**
+             * Percent Of
+             * @description What `percent` is a share of: `stay_total` for the source's own stay price, which can differ from `total` when fees are added, or `prepayment` for the amount taken at booking; null when `percent` is null or the source does not say what it is a share of.
+             */
+            percent_of?: ("stay_total" | "prepayment") | null;
+            /**
+             * Amount
+             * @description Charge as a fixed amount, a decimal string in `currency`; null when not stated.
+             */
+            amount?: string | null;
+            /**
+             * Currency
+             * @description ISO 4217 currency of `amount`; null when `amount` is null.
+             */
+            currency?: string | null;
+            /**
+             * Nights
+             * @description Charge as a number of nights of the stay; null when not stated that way.
+             */
+            nights?: number | null;
+        };
+        /**
+         * CanonicalNames
+         * @description Every name the room is recorded under, one per source; a source without the room is null.
+         */
+        CanonicalNames: {
+            /**
+             * Engine
+             * @description Name in the hotel's booking engine.
+             */
+            engine?: string | null;
+            /**
+             * Site
+             * @description Name on the hotel's website.
+             */
+            site?: string | null;
+            /**
+             * Booking
+             * @description Name on the third-party channel listing.
+             */
+            booking?: string | null;
+            /**
+             * Expedia
+             * @description Name on Expedia.
+             */
+            expedia?: string | null;
+            /**
+             * Supplied
+             * @description Name in the rooms you supplied.
+             */
+            supplied?: string | null;
+        };
+        /**
          * CanonicalRoom
          * @description The room as one record, taking each fact from the most authoritative source that has it
          *     (your rooms, then the hotel's site, then other channels).
@@ -1510,6 +1719,13 @@ export interface components {
              * @description Beds in the room; empty when no source gives them in a structured form.
              */
             bed_config?: components["schemas"]["BedConfig"][];
+            /**
+             * Preferred Name
+             * @description The name we would show for the room: the booking engine's, else the hotel site's, else the third-party channel listing's, else Expedia's; never your supplied name. Omitted when not set.
+             */
+            preferred_name?: string | null;
+            /** @description Every name the room is recorded under, by source; omitted when not set. */
+            names?: components["schemas"]["CanonicalNames"] | null;
         };
         /**
          * CardLocation
@@ -1554,7 +1770,7 @@ export interface components {
         CardRate: {
             /**
              * Status
-             * @description `observed` when seen recently (within 4 hours for stays in the next 14 days, else 24 hours), `stale` when older but within 7 days, `unknown` when there is no usable price and the other fields are null.
+             * @description `observed` when seen recently (within 24 hours, whatever the check-in date), `stale` when older but within 7 days, `unknown` when there is no usable price and the other fields are null.
              * @enum {string}
              */
             status: "observed" | "stale" | "unknown";
@@ -1593,6 +1809,27 @@ export interface components {
              * @description The offer behind this price, bookable with `POST /v2/bookings` for 30 minutes.
              */
             offer_id?: string | null;
+        };
+        /**
+         * ChargeItem
+         * @description One tax or fee line of an offer, as the source itemises it.
+         */
+        ChargeItem: {
+            /**
+             * Code
+             * @description The source's own code for the charge, unaltered; null when the source gives none.
+             */
+            code?: string | null;
+            /**
+             * Name
+             * @description The source's own name for the charge, such as `City tax`; null when it gives none.
+             */
+            name?: string | null;
+            /**
+             * Amount
+             * @description Amount for the whole stay and party, a decimal string in the offer's `currency`.
+             */
+            amount: string;
         };
         /**
          * ChatRequest
@@ -2466,7 +2703,7 @@ export interface components {
          *       },
          *       "request_id": "req_8f2c1a9b3d4e5f60",
          *       "status": "ok",
-         *       "version": "2.1.0"
+         *       "version": "2.3.0"
          *     }
          */
         Health: {
@@ -2478,8 +2715,8 @@ export interface components {
             status: "ok" | "degraded";
             /**
              * Version
-             * @description API version, `2.1.0`; the OpenAPI document's `info.version`.
-             * @default 2.1.0
+             * @description API version, `2.3.0`; the OpenAPI document's `info.version`.
+             * @default 2.3.0
              */
             version?: string;
             /**
@@ -2557,7 +2794,8 @@ export interface components {
          *       "provenance": {
          *         "images_release": "7c1e9a3f-2b4d-4e6a-8f0c-5d9b1a3e7f24",
          *         "profile_source": "site",
-         *         "profile_updated_at": "2026-10-07T09:30:00Z"
+         *         "profile_updated_at": "2026-10-07T09:30:00Z",
+         *         "room_photos_verified": false
          *       },
          *       "rates": {
          *         "channels": [
@@ -2568,12 +2806,34 @@ export interface components {
          *             "offers": [
          *               {
          *                 "availability": "available",
+         *                 "base_total": "860.00",
          *                 "board": "breakfast",
+         *                 "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *                 "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                 "cancellation_penalties": [
+         *                   {
+         *                     "nights": 1,
+         *                     "starts_at": "2026-11-12T17:00:00Z",
+         *                     "starts_local": "2026-11-12T18:00:00"
+         *                   }
+         *                 ],
+         *                 "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *                 "cancellation_type": "free",
          *                 "channel": "direct",
          *                 "currency": "EUR",
          *                 "engine": "SYNXIS",
          *                 "excluded_charges": [],
-         *                 "free_cancellation": false,
+         *                 "fee_total": "16.00",
+         *                 "fees": [
+         *                   {
+         *                     "amount": "16.00",
+         *                     "code": "CITY",
+         *                     "name": "City tax"
+         *                   }
+         *                 ],
+         *                 "free_cancellation": true,
+         *                 "guarantee_required": true,
+         *                 "hotel_timezone": "Europe/Rome",
          *                 "includes_taxes": true,
          *                 "listing_key": "engine_room:1234567",
          *                 "member_rate": false,
@@ -2584,9 +2844,20 @@ export interface components {
          *                   "children_ages": []
          *                 },
          *                 "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *                 "rate_name": "Non-refundable, breakfast included",
+         *                 "payment": "pay_at_hotel",
+         *                 "rate_name": "Flexible rate, breakfast included",
+         *                 "rate_plan_code": "FLEXBB",
          *                 "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *                 "room_name": "Superior Room",
+         *                 "rooms_left": 3,
+         *                 "tax_total": "86.00",
+         *                 "taxes": [
+         *                   {
+         *                     "amount": "86.00",
+         *                     "code": "VAT",
+         *                     "name": "VAT 10%"
+         *                   }
+         *                 ],
          *                 "total": "962.00",
          *                 "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *               }
@@ -2638,12 +2909,34 @@ export interface components {
          *           "offers": [
          *             {
          *               "availability": "available",
+         *               "base_total": "860.00",
          *               "board": "breakfast",
+         *               "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *               "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *               "cancellation_penalties": [
+         *                 {
+         *                   "nights": 1,
+         *                   "starts_at": "2026-11-12T17:00:00Z",
+         *                   "starts_local": "2026-11-12T18:00:00"
+         *                 }
+         *               ],
+         *               "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *               "cancellation_type": "free",
          *               "channel": "direct",
          *               "currency": "EUR",
          *               "engine": "SYNXIS",
          *               "excluded_charges": [],
-         *               "free_cancellation": false,
+         *               "fee_total": "16.00",
+         *               "fees": [
+         *                 {
+         *                   "amount": "16.00",
+         *                   "code": "CITY",
+         *                   "name": "City tax"
+         *                 }
+         *               ],
+         *               "free_cancellation": true,
+         *               "guarantee_required": true,
+         *               "hotel_timezone": "Europe/Rome",
          *               "includes_taxes": true,
          *               "listing_key": "engine_room:1234567",
          *               "member_rate": false,
@@ -2654,9 +2947,20 @@ export interface components {
          *                 "children_ages": []
          *               },
          *               "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *               "rate_name": "Non-refundable, breakfast included",
+         *               "payment": "pay_at_hotel",
+         *               "rate_name": "Flexible rate, breakfast included",
+         *               "rate_plan_code": "FLEXBB",
          *               "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *               "room_name": "Superior Room",
+         *               "rooms_left": 3,
+         *               "tax_total": "86.00",
+         *               "taxes": [
+         *                 {
+         *                   "amount": "86.00",
+         *                   "code": "VAT",
+         *                   "name": "VAT 10%"
+         *                 }
+         *               ],
          *               "total": "962.00",
          *               "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *             }
@@ -2870,7 +3174,7 @@ export interface components {
             estimated_seconds?: number | null;
             /**
              * Result
-             * @description The outcome once `succeeded`: the `POST /v2/rates` response for `rates.live`, `{summary, lines, format, warnings}` for `rates.batch`, the reconcile result for `rooms.reconcile`. Null otherwise.
+             * @description The outcome once `succeeded`: the `POST /v2/rates` response for `rates.live`, plus `timings` (`queued_ms` waiting for the tenant's live slot, `engine_ms` of engine work after that slot is held — the engine deadline starts then and does not include the wait; and, when reported, two optional diagnostic fields: `stages`, an object of stage name to milliseconds, at most 40 names, which may change without notice, and `stage_tasks`, how many hotels reported any. Do not type `timings` as a map of integers); `{summary, lines, format, warnings}` for `rates.batch` (live batches also include `timings`, with `queued_ms` and `engine_ms` only); the reconcile result for `rooms.reconcile`. Null otherwise.
              */
             result?: {
                 [key: string]: unknown;
@@ -2950,12 +3254,34 @@ export interface components {
          *                     "offers": [
          *                       {
          *                         "availability": "available",
+         *                         "base_total": "860.00",
          *                         "board": "breakfast",
+         *                         "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *                         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                         "cancellation_penalties": [
+         *                           {
+         *                             "nights": 1,
+         *                             "starts_at": "2026-11-12T17:00:00Z",
+         *                             "starts_local": "2026-11-12T18:00:00"
+         *                           }
+         *                         ],
+         *                         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *                         "cancellation_type": "free",
          *                         "channel": "direct",
          *                         "currency": "EUR",
          *                         "engine": "SYNXIS",
          *                         "excluded_charges": [],
-         *                         "free_cancellation": false,
+         *                         "fee_total": "16.00",
+         *                         "fees": [
+         *                           {
+         *                             "amount": "16.00",
+         *                             "code": "CITY",
+         *                             "name": "City tax"
+         *                           }
+         *                         ],
+         *                         "free_cancellation": true,
+         *                         "guarantee_required": true,
+         *                         "hotel_timezone": "Europe/Rome",
          *                         "includes_taxes": true,
          *                         "listing_key": "engine_room:1234567",
          *                         "member_rate": false,
@@ -2966,9 +3292,20 @@ export interface components {
          *                           "children_ages": []
          *                         },
          *                         "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *                         "rate_name": "Non-refundable, breakfast included",
+         *                         "payment": "pay_at_hotel",
+         *                         "rate_name": "Flexible rate, breakfast included",
+         *                         "rate_plan_code": "FLEXBB",
          *                         "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *                         "room_name": "Superior Room",
+         *                         "rooms_left": 3,
+         *                         "tax_total": "86.00",
+         *                         "taxes": [
+         *                           {
+         *                             "amount": "86.00",
+         *                             "code": "VAT",
+         *                             "name": "VAT 10%"
+         *                           }
+         *                         ],
          *                         "total": "962.00",
          *                         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *                       }
@@ -3041,6 +3378,22 @@ export interface components {
              * @description Job id; poll it with `GET /v2/jobs/{job_id}`.
              */
             job_id: string;
+        };
+        /**
+         * ListingRef
+         * @description A listing named by its source and key.
+         */
+        ListingRef: {
+            /**
+             * Source
+             * @description Source label of the listing.
+             */
+            source: string;
+            /**
+             * Listing Key
+             * @description The listing's key on that source.
+             */
+            listing_key: string;
         };
         /**
          * LocationFilter
@@ -3226,12 +3579,34 @@ export interface components {
          * @description One bookable price for one room and rate, as observed on a channel.
          * @example {
          *       "availability": "available",
+         *       "base_total": "860.00",
          *       "board": "breakfast",
+         *       "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *       "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *       "cancellation_penalties": [
+         *         {
+         *           "nights": 1,
+         *           "starts_at": "2026-11-12T17:00:00Z",
+         *           "starts_local": "2026-11-12T18:00:00"
+         *         }
+         *       ],
+         *       "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *       "cancellation_type": "free",
          *       "channel": "direct",
          *       "currency": "EUR",
          *       "engine": "SYNXIS",
          *       "excluded_charges": [],
-         *       "free_cancellation": false,
+         *       "fee_total": "16.00",
+         *       "fees": [
+         *         {
+         *           "amount": "16.00",
+         *           "code": "CITY",
+         *           "name": "City tax"
+         *         }
+         *       ],
+         *       "free_cancellation": true,
+         *       "guarantee_required": true,
+         *       "hotel_timezone": "Europe/Rome",
          *       "includes_taxes": true,
          *       "listing_key": "engine_room:1234567",
          *       "member_rate": false,
@@ -3242,9 +3617,20 @@ export interface components {
          *         "children_ages": []
          *       },
          *       "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *       "rate_name": "Non-refundable, breakfast included",
+         *       "payment": "pay_at_hotel",
+         *       "rate_name": "Flexible rate, breakfast included",
+         *       "rate_plan_code": "FLEXBB",
          *       "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *       "room_name": "Superior Room",
+         *       "rooms_left": 3,
+         *       "tax_total": "86.00",
+         *       "taxes": [
+         *         {
+         *           "amount": "86.00",
+         *           "code": "VAT",
+         *           "name": "VAT 10%"
+         *         }
+         *       ],
          *       "total": "962.00",
          *       "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *     }
@@ -3287,6 +3673,11 @@ export interface components {
              */
             rate_name?: string | null;
             /**
+             * Rate Plan Code
+             * @description The source's own code for the rate plan, unaltered, such as `NRROM1`; stable across reads of the same hotel. Null when the source exposes no code.
+             */
+            rate_plan_code?: string | null;
+            /**
              * Total
              * @description Price for the whole stay and the whole party, a decimal string in `currency`; taxes the source quoted separately are added in when their amount is known. `"0"` when sold out.
              */
@@ -3312,6 +3703,36 @@ export interface components {
              */
             excluded_charges?: components["schemas"]["ExcludedCharge"][];
             /**
+             * Base Total
+             * @description Stay price before taxes and mandatory fees, a decimal string in `currency`. Set only when it and the stated `tax_total` and `fee_total` add up to `total`; null when the source gives only an inclusive figure or the parts leave a remainder.
+             */
+            base_total?: string | null;
+            /**
+             * Tax Total
+             * @description Taxes for the whole stay, a decimal string in `currency`; null when the source does not state the amount. Never computed from a tax rate.
+             */
+            tax_total?: string | null;
+            /**
+             * Fee Total
+             * @description Mandatory fees for the whole stay other than taxes, such as a resort fee, a decimal string in `currency`; null when the source does not state the amount.
+             */
+            fee_total?: string | null;
+            /**
+             * Taxes
+             * @description The taxes one by one when the source itemises them; null when it does not.
+             */
+            taxes?: components["schemas"]["ChargeItem"][] | null;
+            /**
+             * Fees
+             * @description The mandatory fees one by one when the source itemises them; null when it does not.
+             */
+            fees?: components["schemas"]["ChargeItem"][] | null;
+            /**
+             * Rooms Left
+             * @description Number of rooms of this type the source shows as still bookable at this rate for the whole stay, a count of rooms and never of guests. Sources cap what they show, so read it as at least this many when it equals the source's cap. Null when the source does not say.
+             */
+            rooms_left?: number | null;
+            /**
              * Board
              * @description Meals included: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source does not say.
              */
@@ -3327,15 +3748,45 @@ export interface components {
              */
             member_rate?: boolean | null;
             /**
+             * Cancellation Type
+             * @description `free` when the rate can be canceled at no charge until `cancellation_deadline`, `non_refundable` when canceling costs the whole stay, `partial` when it can be canceled for a charge smaller than the whole stay; null when unknown.
+             */
+            cancellation_type?: ("free" | "non_refundable" | "partial") | null;
+            /**
              * Cancellation Deadline
-             * @description Last moment to cancel free of charge, RFC 3339; set only on offers read live, null otherwise.
+             * @description Last moment to cancel free of charge, an RFC 3339 instant. Null when the rate has no free cancellation, when the source states no deadline, or when it states one that cannot be placed in time, such as a day with no time zone; `cancellation_deadline_local` then still carries it.
              */
             cancellation_deadline?: string | null;
+            /**
+             * Cancellation Deadline Local
+             * @description The free-cancellation deadline on the hotel's clock: `YYYY-MM-DDTHH:MM:SS`, or `YYYY-MM-DD` when the source named only a day. Set whenever the source states a deadline; null otherwise.
+             */
+            cancellation_deadline_local?: string | null;
+            /**
+             * Hotel Timezone
+             * @description IANA time zone of the hotel, such as `Europe/Rome`, which `cancellation_deadline_local` and `cancellation_penalties[].starts_local` are in; null when unknown.
+             */
+            hotel_timezone?: string | null;
+            /**
+             * Cancellation Penalties
+             * @description What canceling costs, step by step, in the order the source states them; null when the source states none, which does not mean canceling is free.
+             */
+            cancellation_penalties?: components["schemas"]["CancellationPenalty"][] | null;
+            /**
+             * Cancellation Policy
+             * @description The source's own cancellation policy text, unaltered and in the source's language, cut at 4,000 characters; null when the source gives none.
+             */
+            cancellation_policy?: string | null;
             /**
              * Payment
              * @description When the guest pays: `prepay` at booking or `pay_at_hotel` at the property; null when the source does not say.
              */
             payment?: ("prepay" | "pay_at_hotel") | null;
+            /**
+             * Guarantee Required
+             * @description True when the source requires a card or a deposit to guarantee the booking, false when it states none is needed, null when it does not say.
+             */
+            guarantee_required?: boolean | null;
             /** @description The party this price is for, totalled across all rooms. */
             occupancy?: components["schemas"]["Occupancy"] | null;
             /**
@@ -3587,10 +4038,16 @@ export interface components {
              * @description Id of the gallery release the image order comes from; null when the images section was not requested or the hotel is not in a release.
              */
             images_release?: string | null;
+            /**
+             * Room Photos Verified
+             * @description True when the hotel's room photos come from a verified room-to-photo map: each room shows only photos the source lists for that room, first photo is the cover, and a room without a verified photo has none. False means room photos are best-effort.
+             * @default false
+             */
+            room_photos_verified?: boolean;
         };
         /**
          * Quote
-         * @description A request for a price quote, emailed to the hotel by VistaLink. Returned by create, get,
+         * @description A request for a price quote, asked of the hotel by VistaLink by email and/or phone. Returned by create, get,
          *     cancel and accept, and as `data` in `quote.updated`.
          * @example {
          *       "anchor": {
@@ -3739,10 +4196,10 @@ export interface components {
             quote_id: string;
             /**
              * Status
-             * @description Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`.
+             * @description Where the quote is: `queued`, `contacting` (the email is going out), `waiting` (sent, awaiting the reply, or a call is scheduled), `calling` (we are calling the hotel; see `calls`), `offer_received` (see `offers`), then `completed` (the deadline passed with offers), `accepted` (your guest was introduced), `no_response`, `declined`, `cancelled` or `failed`.
              * @enum {string}
              */
-            status: "queued" | "contacting" | "waiting" | "offer_received" | "completed" | "no_response" | "declined" | "cancelled" | "failed" | "accepted";
+            status: "queued" | "contacting" | "waiting" | "calling" | "offer_received" | "completed" | "no_response" | "declined" | "cancelled" | "failed" | "accepted";
             /**
              * Hotel Id
              * Format: uuid
@@ -3779,8 +4236,20 @@ export interface components {
              */
             updated_at: string;
             /**
+             * Channels
+             * @description How the hotel is being asked: `email`, `phone`, or `auto` (email first, then a call). It can differ from what you asked for: `auto` runs email-only where calling is not available, and as phone-only when we hold no email address for the hotel.
+             * @default email
+             * @enum {string}
+             */
+            channels?: "auto" | "email" | "phone";
+            /**
+             * Calls
+             * @description Phone attempts, oldest first; empty for an email-only quote.
+             */
+            calls?: components["schemas"]["QuoteCall"][];
+            /**
              * Offers
-             * @description Priced offers from the hotel's replies, oldest first.
+             * @description Priced offers from the hotel's replies and calls, oldest first.
              */
             offers?: components["schemas"]["QuoteOffer"][];
             /**
@@ -3790,17 +4259,29 @@ export interface components {
             accepted_offer_id?: string | null;
             /**
              * Hotel Commission Applies
-             * @description After acceptance: true when the hotel pays a commission on the booking (half of it is yours), false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known.
+             * @description After acceptance: true when the hotel pays a commission on the booking, false when the offer was a special rate it pays no commission on; null before acceptance or when not yet known. Your part of any commission is `partner_commission_share`.
              */
             hotel_commission_applies?: boolean | null;
             /**
-             * Failure Reason
-             * @description Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable` or `rejected`; null otherwise.
+             * Partner Commission Share
+             * @description After acceptance: your share of the hotel's commission on the booking, a decimal string: `0.5` (half) for an offer the hotel sent by email, `0` for an offer it gave on a phone call; null before acceptance.
              */
-            failure_reason?: ("no_contact_email" | "hotel_suppressed" | "hotel_daily_ceiling" | "invalid_stay" | "invalid_request" | "opted_out" | "unreachable" | "rejected") | null;
+            partner_commission_share?: ("0.5" | "0") | null;
+            /**
+             * Handoff
+             * @description After acceptance: `introduction` when we emailed the hotel with your guest copied; `voucher` when we hold no email address for the hotel (a phone offer), so nothing was sent and you give the guest `voucher` to book with the hotel directly. Null before acceptance.
+             */
+            handoff?: ("introduction" | "voucher") | null;
+            /** @description With `handoff` `voucher`: the details the guest needs; null otherwise. */
+            voucher?: components["schemas"]["QuoteVoucher"] | null;
+            /**
+             * Failure Reason
+             * @description Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable`, `rejected`, or for calls `no_contact` (neither an email address nor a phone number), `no_contact_phone`, `phone_unavailable` or `do_not_call`; null otherwise.
+             */
+            failure_reason?: ("no_contact_email" | "hotel_suppressed" | "hotel_daily_ceiling" | "invalid_stay" | "invalid_request" | "opted_out" | "unreachable" | "rejected" | "no_contact" | "no_contact_phone" | "phone_unavailable" | "do_not_call") | null;
             /**
              * Billing
-             * @description Always null on responses: the quote fee is charged once, when the hotel's first priced offer arrives, and shows in usage.
+             * @description Always null on responses: the email fee is charged once, when the hotel's first priced offer arrives by email, and answered call minutes when each call ends; both show in usage and per call in `calls`.
              */
             billing?: null;
         };
@@ -3847,6 +4328,38 @@ export interface components {
             source: "third_party" | "partner";
         };
         /**
+         * QuoteCall
+         * @description One phone attempt on a quote (``channels`` `auto` or `phone`).
+         */
+        QuoteCall: {
+            /**
+             * Attempt
+             * @description 1 for the first call; redials after an unanswered call count up.
+             */
+            attempt: number;
+            /**
+             * Status
+             * @description `scheduled` (see `scheduled_for`), `in_progress`, `answered` (someone at the hotel spoke with us) or `unanswered` (no answer, busy, voicemail or a failed line; free).
+             * @enum {string}
+             */
+            status: "scheduled" | "in_progress" | "answered" | "unanswered";
+            /**
+             * Scheduled For
+             * @description When the call is (or was) due, RFC 3339 UTC; null when not known.
+             */
+            scheduled_for?: string | null;
+            /**
+             * Answered Minutes
+             * @description Billed minutes of the answered call (talk time rounded up, at most 8); 0 when unanswered, null until the call ends.
+             */
+            answered_minutes?: number | null;
+            /**
+             * Charged
+             * @description What this call cost, a decimal string in USD (`0` when unanswered); null until the call ends.
+             */
+            charged?: string | null;
+        };
+        /**
          * QuoteGuest
          * @description The guest introduced to the hotel when you accept an offer.
          */
@@ -3870,7 +4383,7 @@ export interface components {
         };
         /**
          * QuoteOffer
-         * @description One priced offer the hotel sent by email, read from its reply.
+         * @description One priced offer from the hotel, read from its emailed reply or from the phone call.
          */
         QuoteOffer: {
             /**
@@ -3880,11 +4393,11 @@ export interface components {
             offer_id: string;
             /**
              * Source
-             * @description Always `email`: the hotel's emailed reply.
+             * @description `email` when it came in the hotel's emailed reply, `phone` when the hotel gave it on our call.
              * @default email
-             * @constant
+             * @enum {string}
              */
-            source?: "email";
+            source?: "email" | "phone";
             /**
              * Room Name
              * @description Room the hotel offered, as it named it.
@@ -3947,7 +4460,7 @@ export interface components {
             beats_by?: string | null;
             /**
              * Evidence
-             * @description The sentence of the hotel's reply the price was read from, up to 280 characters.
+             * @description The sentence of the hotel's reply (or of the call transcript) the price was read from, up to 280 characters.
              */
             evidence?: string | null;
             /**
@@ -4040,10 +4553,17 @@ export interface components {
              */
             locale?: string | null;
             /**
-             * Sandbox Outcome
-             * @description Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 on a live key.
+             * Channels
+             * @description How the hotel is asked. `auto` (the default) emails it first and, when it has not answered 12 hours after the email went out, calls it at the next opening-hours window (09:00 to 20:00 hotel time); `email` only emails; `phone` only calls. Calls are made by VistaLink's voice agent, VistaLink-branded and without naming the guest. Where calling is not available yet, `auto` runs email-only and `phone` answers 403 `not_yet_available`.
+             * @default auto
+             * @enum {string}
              */
-            sandbox_outcome?: ("offer" | "declined" | "no_response") | null;
+            channels?: "auto" | "email" | "phone";
+            /**
+             * Sandbox Outcome
+             * @description Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response` by email, or `call_offer`, `call_unanswered` or `call_declined` on a simulated phone call (needs `channels` `auto` or `phone`). Rejected with 400 on a live key.
+             */
+            sandbox_outcome?: ("offer" | "declined" | "no_response" | "call_offer" | "call_unanswered" | "call_declined") | null;
         };
         /**
          * QuoteStay
@@ -4067,6 +4587,62 @@ export interface components {
              * @description One entry per room.
              */
             rooms?: components["schemas"]["Occupancy"][];
+        };
+        /**
+         * QuoteVoucher
+         * @description What the guest needs to book a PHONE offer directly when we hold no email address for the hotel.
+         */
+        QuoteVoucher: {
+            /**
+             * Hotel Name
+             * @description The hotel's name.
+             */
+            hotel_name?: string | null;
+            /**
+             * Hotel Phone
+             * @description The hotel's phone number, E.164.
+             */
+            hotel_phone?: string | null;
+            /**
+             * Total
+             * @description The price the hotel gave on the call.
+             */
+            total?: string | null;
+            /**
+             * Currency
+             * @description ISO 4217 currency of `total`.
+             */
+            currency?: string | null;
+            /**
+             * Room Name
+             * @description Room the hotel offered.
+             */
+            room_name?: string | null;
+            /**
+             * Rate Name
+             * @description Short summary of the terms.
+             */
+            rate_name?: string | null;
+            /**
+             * Board
+             * @description Meals included, or null when not said.
+             */
+            board?: ("none" | "breakfast" | "half" | "full" | "all_inclusive") | null;
+            /**
+             * Free Cancellation
+             * @description Free cancellation, or null when not said.
+             */
+            free_cancellation?: boolean | null;
+            /**
+             * Reference
+             * @description The reference to quote to the hotel (the quote id).
+             */
+            reference?: string | null;
+            /**
+             * Notes
+             * @description Anything else the hotel said that the guest should know.
+             */
+            notes?: string | null;
         };
         /**
          * QuoteWants
@@ -4129,7 +4705,7 @@ export interface components {
             engine?: string | null;
             /**
              * Status
-             * @description `observed` when seen recently (within 4 hours for stays in the next 14 days, else 24 hours) or `stale` when older but within 7 days; channels with no prices are left out.
+             * @description `observed` when seen recently (within 24 hours, whatever the check-in date) or `stale` when older but within 7 days; channels with no prices are left out.
              * @enum {string}
              */
             status: "observed" | "stale" | "unknown" | "unsupported";
@@ -4143,6 +4719,55 @@ export interface components {
              * @description Prices for each room and rate, cheapest first, sold-out last.
              */
             offers?: components["schemas"]["Offer"][];
+        };
+        /**
+         * RateJoin
+         * @description How rates from the hotel's booking engine attach to this room: the engine room code they carry.
+         */
+        RateJoin: {
+            /**
+             * Adapter
+             * @description The rate adapter that reads this engine.
+             */
+            adapter?: string | null;
+            /** @description The engine's id for the hotel; null when the engine has none. */
+            property_key?: components["schemas"]["RatePropertyKey"] | null;
+            /**
+             * Room Code
+             * @description The engine's code for this room, compared as an exact string; null when the engine has none.
+             */
+            room_code?: string | null;
+            /**
+             * Room Code Namespace
+             * @description Which code space `room_code` is in, for example `travelclick_be5_roomtypeid`.
+             */
+            room_code_namespace?: string | null;
+            /**
+             * Rate Plan Ids
+             * @description Rate plan ids the engine lists for this room; may be empty.
+             */
+            rate_plan_ids?: string[];
+            /**
+             * Notes
+             * @description Notes carried verbatim from the engine catalogue.
+             */
+            notes?: string | null;
+        };
+        /**
+         * RatePropertyKey
+         * @description The engine's property identifier, as the rate adapter names it.
+         */
+        RatePropertyKey: {
+            /**
+             * Name
+             * @description Parameter name, for example `hotelId`.
+             */
+            name: string;
+            /**
+             * Value
+             * @description Its value for this hotel, for example `110598`.
+             */
+            value: string;
         };
         /**
          * RateResult
@@ -4167,9 +4792,9 @@ export interface components {
             status: "observed" | "stale" | "unknown" | "unsupported" | "unresolved";
             /**
              * Reason
-             * @description Why the input did not resolve, present only when `unresolved`; the `reason` `POST /v2/hotels/resolve` gives, for example `invalid_hotel_id` (neither a uuid nor a URL), `not_found`, or `not_indexed` (the listing exists but the hotel is not indexed yet).
+             * @description Why this hotel has no priced offer, or why the input did not resolve. On `unresolved`, the `POST /v2/hotels/resolve` reason (`invalid_hotel_id`, `not_found`, `not_indexed`, …). On `unsupported`, `engine_not_live_enabled`. On `unknown`: `engine_blocked` (an edge block, or a cancel after blocks — not a timeout), `engine_timeout`, `engine_failed`, or a reason the booking engine stated (`sold_out`, `member_only`, `limit`, `min_stay`, `not_found`). The same codes are served on a cached read when that is why there is no price. On `observed` with no rooms, `sold_out` — the engine said nothing is available, and that result is billed. Null on a priced result and on a cached miss with no recorded cause.
              */
-            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed") | null;
+            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed" | "sold_out" | "member_only" | "limit" | "min_stay" | "engine_blocked" | "engine_timeout" | "engine_failed" | "engine_not_live_enabled") | null;
             /**
              * Channel
              * @description The channel read, as requested.
@@ -4190,6 +4815,12 @@ export interface components {
              * @description Prices per room, cheapest room first; empty unless `observed` or `stale`.
              */
             rooms?: components["schemas"]["RateRoom"][];
+            /**
+             * No Price Reason
+             * @deprecated
+             * @description Deprecated; read `reason`. Kept with the values it shipped with: `sold_out`, `member_only`, `limit`, `min_stay`, `not_found`, `engine_blocked` and `timeout` (which `reason` spells `engine_timeout`). Null when `reason` is null and when `reason` is a code this field never had (`engine_failed`, `engine_not_live_enabled`, the resolve reasons on `unresolved`).
+             */
+            no_price_reason?: ("sold_out" | "member_only" | "limit" | "min_stay" | "not_found" | "engine_blocked" | "timeout") | null;
         };
         /**
          * RateRoom
@@ -4364,12 +4995,34 @@ export interface components {
          *               "offers": [
          *                 {
          *                   "availability": "available",
+         *                   "base_total": "860.00",
          *                   "board": "breakfast",
+         *                   "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *                   "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                   "cancellation_penalties": [
+         *                     {
+         *                       "nights": 1,
+         *                       "starts_at": "2026-11-12T17:00:00Z",
+         *                       "starts_local": "2026-11-12T18:00:00"
+         *                     }
+         *                   ],
+         *                   "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *                   "cancellation_type": "free",
          *                   "channel": "direct",
          *                   "currency": "EUR",
          *                   "engine": "SYNXIS",
          *                   "excluded_charges": [],
-         *                   "free_cancellation": false,
+         *                   "fee_total": "16.00",
+         *                   "fees": [
+         *                     {
+         *                       "amount": "16.00",
+         *                       "code": "CITY",
+         *                       "name": "City tax"
+         *                     }
+         *                   ],
+         *                   "free_cancellation": true,
+         *                   "guarantee_required": true,
+         *                   "hotel_timezone": "Europe/Rome",
          *                   "includes_taxes": true,
          *                   "listing_key": "engine_room:1234567",
          *                   "member_rate": false,
@@ -4380,9 +5033,20 @@ export interface components {
          *                     "children_ages": []
          *                   },
          *                   "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *                   "rate_name": "Non-refundable, breakfast included",
+         *                   "payment": "pay_at_hotel",
+         *                   "rate_name": "Flexible rate, breakfast included",
+         *                   "rate_plan_code": "FLEXBB",
          *                   "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *                   "room_name": "Superior Room",
+         *                   "rooms_left": 3,
+         *                   "tax_total": "86.00",
+         *                   "taxes": [
+         *                     {
+         *                       "amount": "86.00",
+         *                       "code": "VAT",
+         *                       "name": "VAT 10%"
+         *                     }
+         *                   ],
          *                   "total": "962.00",
          *                   "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *                 }
@@ -4460,6 +5124,47 @@ export interface components {
             unresolved?: number;
         };
         /**
+         * ReconcileCatalogue
+         * @description Which stored catalogue build answered.
+         */
+        ReconcileCatalogue: {
+            /**
+             * Result Id
+             * @description Id of the catalogue build; null before it is registered.
+             */
+            result_id?: string | null;
+            /**
+             * Built At
+             * @description When the build was made, RFC 3339 UTC.
+             */
+            built_at?: string | null;
+            /**
+             * Cascade Version
+             * @description Version of the matching pipeline that built it.
+             */
+            cascade_version?: string | null;
+            /**
+             * Conf Version
+             * @description Version of the confidence model, for example `conf-v0`.
+             */
+            conf_version?: string | null;
+            /**
+             * Gate Passed
+             * @description True when that confidence model passed its accuracy gate; while false, reported confidences are capped at 0.79.
+             */
+            gate_passed?: boolean | null;
+            /**
+             * Registry Watermark
+             * @description Opaque marker of the catalogue registry state the build was served at.
+             */
+            registry_watermark?: unknown | null;
+            /**
+             * Lease Until
+             * @description Until when the build may be served, RFC 3339 UTC; after it the service falls back to matching on the fly. Null when no bound is set.
+             */
+            lease_until?: string | null;
+        };
+        /**
          * ReconcileConflict
          * @description A fact the matched listings disagree on.
          */
@@ -4478,13 +5183,84 @@ export interface components {
             };
         };
         /**
+         * ReconcileEngine
+         * @description The hotel's booking-engine record behind a listing.
+         */
+        ReconcileEngine: {
+            /**
+             * Engine
+             * @description Booking engine, for example `travelclick` or `marriott`.
+             */
+            engine?: string | null;
+            /**
+             * Engine Row Id
+             * @description Id of the room in our engine catalogue.
+             */
+            engine_row_id?: string | null;
+            /**
+             * Sale Status
+             * @description `sold_direct` when the engine sells the room, `configured_not_sold_direct` when it is set up but not on sale, `unknown` otherwise.
+             */
+            sale_status?: ("sold_direct" | "configured_not_sold_direct" | "unknown") | null;
+            /**
+             * Is Package
+             * @description True when the engine product is a package (room plus extras), not a plain room.
+             */
+            is_package?: boolean | null;
+            /**
+             * Single Use Of
+             * @description For a single-use product: `engine_row_id` of the room it is sold from; null otherwise.
+             */
+            single_use_of?: string | null;
+            /** @description How rates attach to this room; null when the engine gives no code. */
+            rate_join?: components["schemas"]["RateJoin"] | null;
+        };
+        /**
+         * ReconcileEngineProduct
+         * @description One engine product sold as this room, verbatim from the engine catalogue.
+         */
+        ReconcileEngineProduct: {
+            /**
+             * Engine
+             * @description Booking engine, for example `travelclick` or `marriott`.
+             */
+            engine?: string | null;
+            /**
+             * Engine Row Id
+             * @description Id of the room in our engine catalogue.
+             */
+            engine_row_id?: string | null;
+            /**
+             * Sale Status
+             * @description `sold_direct` when the engine sells the room, `configured_not_sold_direct` when it is set up but not on sale, `unknown` otherwise.
+             */
+            sale_status?: ("sold_direct" | "configured_not_sold_direct" | "unknown") | null;
+            /**
+             * Is Package
+             * @description True when the engine product is a package (room plus extras), not a plain room.
+             */
+            is_package?: boolean | null;
+            /**
+             * Single Use Of
+             * @description For a single-use product: `engine_row_id` of the room it is sold from; null otherwise.
+             */
+            single_use_of?: string | null;
+            /** @description How rates attach to this room; null when the engine gives no code. */
+            rate_join?: components["schemas"]["RateJoin"] | null;
+            /**
+             * Name
+             * @description Product name in the engine.
+             */
+            name?: string | null;
+        };
+        /**
          * ReconcileListing
          * @description One listing of a room on one source.
          */
         ReconcileListing: {
             /**
              * Source
-             * @description Source label: `booking`, `site`, `expedia`, or the `label` of rooms you supplied.
+             * @description Source label: `booking`, `site`, `expedia`, `engine` (the hotel's booking engine, which comes with its site), or the `label` of rooms you supplied.
              */
             source: string;
             /**
@@ -4502,6 +5278,38 @@ export interface components {
              * @description Page of the listing, or the source URL you sent; null when neither is known.
              */
             url?: string | null;
+            /**
+             * Relation
+             * @description Always `same` when reported: the listing is this room. Other relations between listings are in the result's `related`.
+             */
+            relation?: "same" | null;
+            /**
+             * Decided By
+             * @description What placed the listing in this room: `catalogue:<method>` when it came from the stored room catalogue (`deterministic` for an exact engine link, `d3`, `qwen` or `v8` for a model, `fable_teacher` or `assistant_verified` for a reviewed label), `prematch` when matched on the fly. Omitted when not set.
+             */
+            decided_by?: ("catalogue:d3" | "catalogue:qwen" | "catalogue:v8" | "catalogue:deterministic" | "catalogue:fable_teacher" | "catalogue:assistant_verified" | "prematch") | null;
+            /**
+             * Confidence
+             * @description Confidence from 0 to 1 that this listing belongs to the room; omitted while confidence is uncalibrated or when not set.
+             */
+            confidence?: number | null;
+            /**
+             * Verified
+             * @description Who reviewed this membership: `owner` (a person on our side), `assistant` or `fable_teacher` (model reviewers); omitted when it was not reviewed.
+             */
+            verified?: ("owner" | "assistant" | "fable_teacher") | null;
+            /**
+             * Model Disagrees With Verified
+             * @description True when the matching model disagrees with the reviewed label; omitted until model scores exist or when the membership was not reviewed.
+             */
+            model_disagrees_with_verified?: boolean | null;
+            /**
+             * Identity Sha256
+             * @description SHA-256 of the listing's identity-relevant facts when the catalogue was built; a listing whose facts have changed since no longer counts as this room. Omitted when not set.
+             */
+            identity_sha256?: string | null;
+            /** @description For a booking-engine listing, the engine record behind it; omitted otherwise. */
+            engine?: components["schemas"]["ReconcileEngine"] | null;
         };
         /**
          * ReconcileRequest
@@ -4564,64 +5372,211 @@ export interface components {
          * @description Result of `POST /v2/rooms/reconcile`: the response body when synchronous, the job
          *     `result` otherwise.
          * @example {
-         *       "billing": {
-         *         "amount": "0.25",
-         *         "currency": "USD",
-         *         "sku": "rooms.reconcile.urls",
-         *         "units": 1
-         *       },
          *       "hotel_id": "43d0be71-5f3c-4c8e-9a52-1d7e2b6f0a19",
          *       "reconciliation_id": "rec_9b2e4c7a1f3d5e8b0c6a2d4f",
+         *       "version": "reconcile-v1.1+cascade-49a6dc68cee0",
+         *       "coverage": "catalogue",
+         *       "catalogue_pending": false,
+         *       "catalogue": {
+         *         "result_id": null,
+         *         "built_at": "2026-10-16T11:11:15Z",
+         *         "cascade_version": "recon-wave-20261016+union-435970727",
+         *         "conf_version": "conf-v0",
+         *         "gate_passed": false,
+         *         "registry_watermark": null,
+         *         "lease_until": null
+         *       },
          *       "rooms": [
          *         {
-         *           "basis": [
-         *             "name_similarity:0.81",
-         *             "size_match",
-         *             "image_similarity:0.88"
-         *           ],
          *           "canonical": {
+         *             "room_id": "81d1c041-0686-5075-b5cc-a5329e181a4a",
+         *             "name": "Marriott Suite",
+         *             "size_m2": 62,
+         *             "occupancy": 3,
          *             "bed_config": [
          *               {
-         *                 "count": 1,
-         *                 "type": "king"
+         *                 "type": "king",
+         *                 "count": 1
          *               }
          *             ],
-         *             "name": "Superior Room",
-         *             "occupancy": 2,
-         *             "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
-         *             "size_m2": 28
-         *           },
-         *           "confidence": 0.93,
-         *           "conflicts": [
-         *             {
-         *               "field": "size_m2",
-         *               "values": {
-         *                 "partner_pms": 28,
-         *                 "site": 30
-         *               }
+         *             "preferred_name": "Marriott Suite",
+         *             "names": {
+         *               "engine": "Marriott Suite",
+         *               "site": "Marriott Suite"
          *             }
-         *           ],
+         *           },
          *           "listings": [
          *             {
-         *               "listing_key": "site:superior",
-         *               "name": "Superior Double Room",
-         *               "source": "site",
-         *               "url": "https://umilta36.com/rooms/superior"
+         *               "source": "engine",
+         *               "name": "Marriott Suite",
+         *               "listing_key": "SUIT",
+         *               "url": null,
+         *               "relation": "same",
+         *               "decided_by": "catalogue:deterministic",
+         *               "confidence": null,
+         *               "verified": null,
+         *               "model_disagrees_with_verified": null,
+         *               "identity_sha256": "8e15c89f21ce782b018a239953b64356df78766b45590062b4589d2e9e3308bf",
+         *               "engine": {
+         *                 "engine": "marriott",
+         *                 "engine_row_id": "SUIT",
+         *                 "sale_status": "unknown",
+         *                 "is_package": false,
+         *                 "single_use_of": null,
+         *                 "rate_join": {
+         *                   "adapter": "booking-automation src/providers/marriott",
+         *                   "property_key": {
+         *                     "name": "propertyCode",
+         *                     "value": "STVMC"
+         *                   },
+         *                   "room_code": "SUIT",
+         *                   "room_code_namespace": "marriott_room_type_code",
+         *                   "rate_plan_ids": [],
+         *                   "notes": "Room code taken from the engine catalogue; no rate plan ids held."
+         *                 }
+         *               }
          *             },
          *             {
-         *               "listing_key": "SUP-K",
-         *               "name": "Superior King",
-         *               "source": "partner_pms"
+         *               "source": "site",
+         *               "name": "Marriott Suite",
+         *               "listing_key": "marriott suite",
+         *               "url": null,
+         *               "relation": "same",
+         *               "decided_by": "catalogue:deterministic",
+         *               "confidence": null,
+         *               "verified": null,
+         *               "model_disagrees_with_verified": null,
+         *               "identity_sha256": "686c911632dc82dbc8965d74dda938e9b03e84ba5a35b4eaa7e0b685c5a377e0"
          *             }
+         *           ],
+         *           "confidence": null,
+         *           "confidence_status": "uncalibrated",
+         *           "seen_in_training": null,
+         *           "basis": [
+         *             "confidence:uncalibrated",
+         *             "decided_by:catalogue:deterministic",
+         *             "engine_link:exact",
+         *             "name_exact"
+         *           ],
+         *           "conflicts": [],
+         *           "room_type_id": "81d1c041-0686-5075-b5cc-a5329e181a4a",
+         *           "cluster_id": "cl:1ebd723f:01e88361d2",
+         *           "coverage": "multi_source",
+         *           "sale_status": null,
+         *           "engine_products": [
+         *             {
+         *               "engine": "marriott",
+         *               "engine_row_id": "SUIT",
+         *               "sale_status": "unknown",
+         *               "is_package": false,
+         *               "single_use_of": null,
+         *               "rate_join": {
+         *                 "adapter": "booking-automation src/providers/marriott",
+         *                 "property_key": {
+         *                   "name": "propertyCode",
+         *                   "value": "STVMC"
+         *                 },
+         *                 "room_code": "SUIT",
+         *                 "room_code_namespace": "marriott_room_type_code",
+         *                 "rate_plan_ids": [],
+         *                 "notes": "Room code taken from the engine catalogue; no rate plan ids held."
+         *               },
+         *               "name": "Marriott Suite"
+         *             }
+         *           ],
+         *           "conflicts_extended": []
+         *         }
+         *       ],
+         *       "unmatched": {
+         *         "booking": [],
+         *         "site": [
+         *           {
+         *             "source": "site",
+         *             "name": "All of our hotel accommodations",
+         *             "listing_key": "all of our hotel accommodations",
+         *             "url": null,
+         *             "nearest": {
+         *               "source": "booking",
+         *               "name": "Deluxe Guest room, 1 King, River view",
+         *               "confidence": null,
+         *               "ambiguous": true
+         *             },
+         *             "relation_hint": "unresolved_candidate",
+         *             "room_type_id": "701dd477-e46b-5809-98ce-e458bd95bc17",
+         *             "cluster_id": "cl:1ebd723f:1b782ba8e6",
+         *             "coverage": "site_only"
+         *           }
+         *         ],
+         *         "engine": [
+         *           {
+         *             "source": "engine",
+         *             "name": "Deluxe Guest room",
+         *             "listing_key": "CKNG",
+         *             "url": null,
+         *             "sale_status": "unknown",
+         *             "engine": {
+         *               "engine": "marriott",
+         *               "engine_row_id": "CKNG",
+         *               "sale_status": "unknown",
+         *               "is_package": false,
+         *               "single_use_of": null,
+         *               "rate_join": {
+         *                 "adapter": "booking-automation src/providers/marriott",
+         *                 "property_key": {
+         *                   "name": "propertyCode",
+         *                   "value": "STVMC"
+         *                 },
+         *                 "room_code": "CKNG",
+         *                 "room_code_namespace": "marriott_room_type_code",
+         *                 "rate_plan_ids": [],
+         *                 "notes": "Room code taken from the engine catalogue; no rate plan ids held."
+         *               }
+         *             },
+         *             "room_type_id": "322ba314-46b1-5ec7-a087-35fd8a2f94d0",
+         *             "cluster_id": "cl:1ebd723f:edb300666d",
+         *             "coverage": "engine_only"
+         *           }
+         *         ]
+         *       },
+         *       "shared": [],
+         *       "related": [
+         *         {
+         *           "from": {
+         *             "source": "site",
+         *             "listing_key": "all of our hotel accommodations"
+         *           },
+         *           "relation": "unresolved_candidate",
+         *           "to": {
+         *             "source": "booking",
+         *             "listing_key": "room_type:7471321"
+         *           },
+         *           "confidence": null,
+         *           "basis": [
+         *             "cascade:fable_teacher:0.600",
+         *             "flag:v8_not_run_labels_decide"
          *           ]
          *         }
          *       ],
-         *       "shared": [],
-         *       "unmatched": {
-         *         "partner_pms": [],
-         *         "site": []
-         *       },
-         *       "version": "reconcile-v1.0"
+         *       "source_status": [
+         *         {
+         *           "input": 0,
+         *           "kind": "booking_url",
+         *           "label": "booking",
+         *           "status": "ok"
+         *         },
+         *         {
+         *           "input": 1,
+         *           "kind": "website_url",
+         *           "label": "site",
+         *           "status": "ok"
+         *         }
+         *       ],
+         *       "billing": {
+         *         "sku": "rooms.reconcile.urls",
+         *         "units": 1,
+         *         "amount": "0.25",
+         *         "currency": "USD"
+         *       }
          *     }
          */
         ReconcileResult: {
@@ -4662,6 +5617,28 @@ export interface components {
              * @description Listings that sell several rooms under one name.
              */
             shared?: components["schemas"]["SharedListing"][];
+            /**
+             * Source Status
+             * @description One entry per source you sent, in order. An `unsupported` source added no listings; its label still appears in `unmatched` with an empty list.
+             */
+            source_status?: components["schemas"]["SourceStatus"][];
+            /**
+             * Coverage
+             * @description How the result was made: `catalogue` (from the stored room catalogue), `catalogue+prematch` (catalogue plus listings matched on the fly) or `prematch_only` (matched on the fly). Omitted when not set.
+             */
+            coverage?: ("catalogue" | "catalogue+prematch" | "prematch_only") | null;
+            /**
+             * Catalogue Pending
+             * @description True when the hotel is queued for a catalogue build (not covered yet, or stale); ask again later for a catalogue answer. Omitted when not set.
+             */
+            catalogue_pending?: boolean | null;
+            /** @description Which stored catalogue build answered; omitted for `prematch_only` or when not set. */
+            catalogue?: components["schemas"]["ReconcileCatalogue"] | null;
+            /**
+             * Related
+             * @description Relations between listings that are not the same room, such as a shared listing that covers another or a package offered for a room; omitted when not set.
+             */
+            related?: components["schemas"]["RelatedListing"][] | null;
             /** @description What the reconciliation cost; amount `"0"` for an identical request repeated within 30 days. */
             billing?: components["schemas"]["Billing"] | null;
         };
@@ -4679,9 +5656,19 @@ export interface components {
             listings?: components["schemas"]["ReconcileListing"][];
             /**
              * Confidence
-             * @description Confidence of the match from 0 to 1.
+             * @description Confidence of the match from 0 to 1; null until calibrated: a room from the stored catalogue has no calibrated score yet, and its `confidence_status` says why.
              */
-            confidence: number;
+            confidence: number | null;
+            /**
+             * Confidence Status
+             * @description What `confidence` is: `uncalibrated` (null, no calibrated score yet), `illustrative` (a placeholder score, not a measured probability) or `calibrated`. Omitted when not set.
+             */
+            confidence_status?: ("uncalibrated" | "illustrative" | "calibrated") | null;
+            /**
+             * Seen In Training
+             * @description True when this hotel was in the data the confidence model was fitted on; omitted until `confidence` is calibrated.
+             */
+            seen_in_training?: boolean | null;
             /**
              * Basis
              * @description Evidence the match rests on, for example `name_exact`, `name_similarity:0.81`, `size_match`, `occupancy_match`, `beds_overlap:1.00` or `image_similarity:0.88`.
@@ -4692,6 +5679,62 @@ export interface components {
              * @description Facts the listings disagree on.
              */
             conflicts?: components["schemas"]["ReconcileConflict"][];
+            /**
+             * Room Type Id
+             * @description Stable catalogue id (a UUID) of the physical room type; omitted when not set.
+             */
+            room_type_id?: string | null;
+            /**
+             * Cluster Id
+             * @description Id of the room's group in the catalogue build; omitted when not set.
+             */
+            cluster_id?: string | null;
+            /**
+             * Coverage
+             * @description `multi_source` for a room in `rooms`; omitted when not set.
+             */
+            coverage?: ("multi_source" | "engine_only" | "site_only" | "booking_only" | "expedia_only") | null;
+            /**
+             * Sale Status
+             * @description `sold_direct` when the hotel's booking engine sells any product of this room, `configured_not_sold_direct` when every one is set up but not on sale; omitted without engine products or when not set.
+             */
+            sale_status?: ("sold_direct" | "configured_not_sold_direct") | null;
+            /**
+             * Engine Products
+             * @description One entry per booking-engine listing in the room, verbatim from the engine catalogue, with how rates attach; empty when the room has none, omitted when not set.
+             */
+            engine_products?: components["schemas"]["ReconcileEngineProduct"][] | null;
+            /**
+             * Conflicts Extended
+             * @description Disagreements on facts outside the three in `conflicts` (same shape), such as `name`, `bathroom`, `occupancy` against the engine, or `sale_status`; omitted when not set.
+             */
+            conflicts_extended?: components["schemas"]["ReconcileConflict"][] | null;
+        };
+        /**
+         * RelatedListing
+         * @description A directed relation between two listings that are not the same room.
+         */
+        RelatedListing: {
+            /** @description The listing the relation starts from. */
+            from: components["schemas"]["ListingRef"];
+            /**
+             * Relation
+             * @description `covers` (one listing sells the other under a shared name), `unit_of`, `offer_for` (a package or rate of the other room), `name_match_candidate`, `same_not_merged` (alike but kept apart because facts contradict), `ambiguous_name_match` or `unresolved_candidate` (a possible match left undecided).
+             * @enum {string}
+             */
+            relation: "covers" | "unit_of" | "offer_for" | "name_match_candidate" | "same_not_merged" | "ambiguous_name_match" | "unresolved_candidate";
+            /** @description The listing the relation points to. */
+            to: components["schemas"]["ListingRef"];
+            /**
+             * Confidence
+             * @description Confidence from 0 to 1; null while confidence is uncalibrated.
+             */
+            confidence?: number | null;
+            /**
+             * Basis
+             * @description Evidence the relation rests on.
+             */
+            basis?: string[];
         };
         /**
          * ResolveRequest
@@ -5436,7 +6479,7 @@ export interface components {
          *       "status": "completed",
          *       "total_estimate": 143,
          *       "versions": {
-         *         "contract": "2.1",
+         *         "contract": "2.3",
          *         "ranking": "r2026.10"
          *       },
          *       "warnings": [
@@ -5522,6 +6565,38 @@ export interface components {
              * @description Names of the rooms it covers.
              */
             covers?: string[];
+        };
+        /**
+         * SourceStatus
+         * @description Whether one input source could be matched.
+         */
+        SourceStatus: {
+            /**
+             * Input
+             * @description Position of the source in the request's `sources`, from 0.
+             */
+            input: number;
+            /**
+             * Kind
+             * @description The source's `kind` as sent: `booking_url`, `website_url`, `expedia_url` or `rooms`.
+             */
+            kind: string;
+            /**
+             * Label
+             * @description Label its listings use in `rooms` and `unmatched`.
+             */
+            label: string;
+            /**
+             * Status
+             * @description `ok` when its rooms were matched; `unsupported` when we cannot read this source yet.
+             * @enum {string}
+             */
+            status: "ok" | "unsupported";
+            /**
+             * Reason
+             * @description Why it is `unsupported`, for example `expedia_not_ingested`; null when `ok`.
+             */
+            reason?: string | null;
         };
         /**
          * Stay
@@ -5629,7 +6704,7 @@ export interface components {
         UnmatchedListing: {
             /**
              * Source
-             * @description Source label: `booking`, `site`, `expedia`, or the `label` of rooms you supplied.
+             * @description Source label: `booking`, `site`, `expedia`, `engine` (the hotel's booking engine, which comes with its site), or the `label` of rooms you supplied.
              */
             source: string;
             /**
@@ -5649,6 +6724,33 @@ export interface components {
             url?: string | null;
             /** @description The closest candidate it had; null when there was none. */
             nearest?: components["schemas"]["NearestListing"] | null;
+            /**
+             * Relation Hint
+             * @description How the listing relates to another listing without being the same room, for example `covered_by` (sold under a shared listing), `offer_for` (a package of another room), `unit_of`, `single_use_of` or `unresolved_candidate` (a possible match left undecided). The edges themselves are in `related`. Omitted when there is none or it was not set.
+             */
+            relation_hint?: ("abstained_same" | "offer_for" | "unit_of" | "covered_by" | "covers" | "has_unit" | "has_offer" | "name_match_candidate" | "same_not_merged" | "ambiguous_name_match" | "unresolved_candidate" | "single_use_of" | "has_single_use") | null;
+            /**
+             * Sale Status
+             * @description For a booking-engine listing: `sold_direct`, `configured_not_sold_direct` or `unknown`.
+             */
+            sale_status?: ("sold_direct" | "configured_not_sold_direct" | "unknown") | null;
+            /** @description For a booking-engine listing, the engine record behind it; omitted otherwise. */
+            engine?: components["schemas"]["ReconcileEngine"] | null;
+            /**
+             * Room Type Id
+             * @description Stable catalogue id (a UUID) of the room type this listing alone represents; omitted when not set.
+             */
+            room_type_id?: string | null;
+            /**
+             * Cluster Id
+             * @description Id of the listing's group in the catalogue build; omitted when not set.
+             */
+            cluster_id?: string | null;
+            /**
+             * Coverage
+             * @description Which source the room is known from alone: `engine_only`, `site_only`, `booking_only` or `expedia_only`. Omitted when not set.
+             */
+            coverage?: ("multi_source" | "engine_only" | "site_only" | "booking_only" | "expedia_only") | null;
         };
         /**
          * UrlSource
@@ -5657,7 +6759,7 @@ export interface components {
          */
         UrlSource: {
             /**
-             * @description `booking_url` (third-party channel listing), `website_url` (the hotel's website) or `expedia_url`; their listings appear under the labels `booking`, `site` and `expedia`. (enum property replaced by openapi-typescript)
+             * @description `booking_url` (third-party channel listing), `website_url` (the hotel's website) or `expedia_url`; their listings appear under the labels `booking`, `site` and `expedia`. `expedia_url` is accepted but not matched yet: until Expedia listings are ingested it comes back in `source_status` as `unsupported` (`expedia_not_ingested`), adds no listings. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "booking_url" | "expedia_url" | "website_url";
@@ -5789,8 +6891,8 @@ export interface components {
         Versions: {
             /**
              * Contract
-             * @description API contract version, `2.1`.
-             * @default 2.1
+             * @description API contract version, `2.3`.
+             * @default 2.3
              */
             contract?: string;
             /**
@@ -6155,13 +7257,39 @@ export interface components {
          *                   "offers": [
          *                     {
          *                       "availability": "available",
+         *                       "base_total": "860.00",
          *                       "board": "breakfast",
-         *                       "cancellation_deadline": null,
+         *                       "cancellation_deadline": "2026-11-12T17:00:00Z",
+         *                       "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                       "cancellation_penalties": [
+         *                         {
+         *                           "amount": null,
+         *                           "currency": null,
+         *                           "days_before_arrival": null,
+         *                           "nights": 1,
+         *                           "percent": null,
+         *                           "percent_of": null,
+         *                           "starts_at": "2026-11-12T17:00:00Z",
+         *                           "starts_local": "2026-11-12T18:00:00"
+         *                         }
+         *                       ],
+         *                       "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
+         *                       "cancellation_type": "free",
          *                       "channel": "direct",
          *                       "currency": "EUR",
          *                       "engine": "SYNXIS",
          *                       "excluded_charges": [],
-         *                       "free_cancellation": false,
+         *                       "fee_total": "16.00",
+         *                       "fees": [
+         *                         {
+         *                           "amount": "16.00",
+         *                           "code": "CITY",
+         *                           "name": "City tax"
+         *                         }
+         *                       ],
+         *                       "free_cancellation": true,
+         *                       "guarantee_required": true,
+         *                       "hotel_timezone": "Europe/Rome",
          *                       "includes_taxes": true,
          *                       "listing_key": "engine_room:1234567",
          *                       "member_rate": false,
@@ -6172,10 +7300,20 @@ export interface components {
          *                         "children_ages": []
          *                       },
          *                       "offer_id": "off_t3c8e1a9b4f2d7e6a5c0b",
-         *                       "payment": null,
-         *                       "rate_name": "Non-refundable, breakfast included",
+         *                       "payment": "pay_at_hotel",
+         *                       "rate_name": "Flexible rate, breakfast included",
+         *                       "rate_plan_code": "FLEXBB",
          *                       "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
          *                       "room_name": "Superior Room",
+         *                       "rooms_left": 3,
+         *                       "tax_total": "86.00",
+         *                       "taxes": [
+         *                         {
+         *                           "amount": "86.00",
+         *                           "code": "VAT",
+         *                           "name": "VAT 10%"
+         *                         }
+         *                       ],
          *                       "total": "962.00",
          *                       "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
          *                     }
@@ -6248,9 +7386,12 @@ export type BookingPayment = components['schemas']['BookingPayment'];
 export type BookingPaymentMethod = components['schemas']['BookingPaymentMethod'];
 export type BookingRequest = components['schemas']['BookingRequest'];
 export type BudgetFilter = components['schemas']['BudgetFilter'];
+export type CancellationPenalty = components['schemas']['CancellationPenalty'];
+export type CanonicalNames = components['schemas']['CanonicalNames'];
 export type CanonicalRoom = components['schemas']['CanonicalRoom'];
 export type CardLocation = components['schemas']['CardLocation'];
 export type CardRate = components['schemas']['CardRate'];
+export type ChargeItem = components['schemas']['ChargeItem'];
 export type ChatRequest = components['schemas']['ChatRequest'];
 export type ChatResponse = components['schemas']['ChatResponse'];
 export type Clarification = components['schemas']['Clarification'];
@@ -6286,6 +7427,7 @@ export type JobError = components['schemas']['JobError'];
 export type JobList = components['schemas']['JobList'];
 export type JobProgress = components['schemas']['JobProgress'];
 export type JobRef = components['schemas']['JobRef'];
+export type ListingRef = components['schemas']['ListingRef'];
 export type LocationFilter = components['schemas']['LocationFilter'];
 export type Mandate = components['schemas']['Mandate'];
 export type NearFilter = components['schemas']['NearFilter'];
@@ -6307,24 +7449,32 @@ export type Provenance = components['schemas']['Provenance'];
 export type Quote = components['schemas']['Quote'];
 export type QuoteAcceptRequest = components['schemas']['QuoteAcceptRequest'];
 export type QuoteAnchor = components['schemas']['QuoteAnchor'];
+export type QuoteCall = components['schemas']['QuoteCall'];
 export type QuoteGuest = components['schemas']['QuoteGuest'];
 export type QuoteOffer = components['schemas']['QuoteOffer'];
 export type QuoteRequest = components['schemas']['QuoteRequest'];
 export type QuoteStay = components['schemas']['QuoteStay'];
+export type QuoteVoucher = components['schemas']['QuoteVoucher'];
 export type QuoteWants = components['schemas']['QuoteWants'];
 export type QuoteWantsOut = components['schemas']['QuoteWantsOut'];
 export type RateChannel = components['schemas']['RateChannel'];
+export type RateJoin = components['schemas']['RateJoin'];
+export type RatePropertyKey = components['schemas']['RatePropertyKey'];
 export type RateResult = components['schemas']['RateResult'];
 export type RateRoom = components['schemas']['RateRoom'];
 export type RatesBatchRequest = components['schemas']['RatesBatchRequest'];
 export type RatesRequest = components['schemas']['RatesRequest'];
 export type RatesResponse = components['schemas']['RatesResponse'];
 export type RatesSummary = components['schemas']['RatesSummary'];
+export type ReconcileCatalogue = components['schemas']['ReconcileCatalogue'];
 export type ReconcileConflict = components['schemas']['ReconcileConflict'];
+export type ReconcileEngine = components['schemas']['ReconcileEngine'];
+export type ReconcileEngineProduct = components['schemas']['ReconcileEngineProduct'];
 export type ReconcileListing = components['schemas']['ReconcileListing'];
 export type ReconcileRequest = components['schemas']['ReconcileRequest'];
 export type ReconcileResult = components['schemas']['ReconcileResult'];
 export type ReconciledRoom = components['schemas']['ReconciledRoom'];
+export type RelatedListing = components['schemas']['RelatedListing'];
 export type ResolveRequest = components['schemas']['ResolveRequest'];
 export type ResolveResponse = components['schemas']['ResolveResponse'];
 export type ResolveResult = components['schemas']['ResolveResult'];
@@ -6344,6 +7494,7 @@ export type SearchHotel = components['schemas']['SearchHotel'];
 export type SearchRequest = components['schemas']['SearchRequest'];
 export type SearchResponse = components['schemas']['SearchResponse'];
 export type SharedListing = components['schemas']['SharedListing'];
+export type SourceStatus = components['schemas']['SourceStatus'];
 export type Stay = components['schemas']['Stay'];
 export type SuppliedBed = components['schemas']['SuppliedBed'];
 export type SuppliedRoom = components['schemas']['SuppliedRoom'];
@@ -6416,7 +7567,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6425,7 +7576,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6548,7 +7699,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6557,7 +7708,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6626,7 +7777,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6635,7 +7786,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6728,7 +7879,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6737,7 +7888,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6821,7 +7972,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6830,7 +7981,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6932,7 +8083,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6950,7 +8101,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7034,7 +8185,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7043,7 +8194,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7133,7 +8284,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7142,7 +8293,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7217,7 +8368,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7226,7 +8377,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7297,7 +8448,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7306,7 +8457,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7386,7 +8537,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7395,7 +8546,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7481,7 +8632,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7490,7 +8641,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7561,7 +8712,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7570,7 +8721,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7650,7 +8801,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7659,7 +8810,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7754,7 +8905,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7763,7 +8914,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7776,7 +8927,10 @@ export interface operations {
     };
     getJob: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Seconds to wait for the job to finish before answering. `0` (the default) answers at once. The answer is the same Job either way: still `queued` or `running` if the wait ran out. */
+                wait?: number;
+            };
             header?: never;
             path: {
                 /**
@@ -7834,7 +8988,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7843,7 +8997,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7915,7 +9069,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -7924,7 +9078,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7992,7 +9146,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8001,7 +9155,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8081,7 +9235,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8090,7 +9244,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8146,7 +9300,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8155,7 +9309,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8224,7 +9378,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8233,7 +9387,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8302,7 +9456,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8311,7 +9465,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8390,7 +9544,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8399,7 +9553,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8468,7 +9622,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8477,7 +9631,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8533,7 +9687,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8542,7 +9696,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8598,7 +9752,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC) */
+            /** @description rate_limited: over the team's requests-per-minute (`Retry-After`), or `details.reason: "daily_hotel_cap"` when the team has received data for its plan's number of different hotels today (Free 2,000, Build 50,000, Scale 250,000; repeats don't count; `details.resets_at` is 00:00 UTC), or `details.reason: "live_backlog_full"` when the team already has its limit of live rate jobs queued or running (`Retry-After`; nothing is queued or charged) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -8607,7 +9761,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unavailable */
+            /** @description unavailable: retry after `Retry-After`. `details.reason: "database_busy"` (no database connection was available in time) and `details.reason: "instance_shutdown"` (the server is restarting and takes no new live rate jobs) both mean the request did nothing and nothing was charged */
             503: {
                 headers: {
                     [name: string]: unknown;

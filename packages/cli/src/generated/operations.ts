@@ -20,7 +20,7 @@ export interface Operation {
   scope: string | null;
   public: boolean;
 }
-export const SPEC_VERSION = "2.1.0";
+export const SPEC_VERSION = "2.3.0";
 export const OPERATIONS: Operation[] = [
   {
     "key": "POST /v2/hotels/resolve",
@@ -556,10 +556,16 @@ export const OPERATIONS: Operation[] = [
         "description": "Language of the email to the hotel, as a language tag such as `en` or `it`; the hotel's own language when omitted."
       },
       {
+        "name": "channels",
+        "kind": "string",
+        "required": false,
+        "description": "How the hotel is asked. `auto` (the default) emails it first and, when it has not answered 12 hours after the email went"
+      },
+      {
         "name": "sandbox_outcome",
         "kind": "string",
         "required": false,
-        "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response`. Rejected with 400 o"
+        "description": "Test keys only: how the simulated hotel answers, `offer` (the default), `declined` or `no_response` by email, or `call_o"
       }
     ],
     "idempotent": true,
@@ -636,7 +642,13 @@ export const OPERATIONS: Operation[] = [
     "pathParams": [
       "job_id"
     ],
-    "query": [],
+    "query": [
+      {
+        "name": "wait",
+        "kind": "integer",
+        "description": "Seconds to wait for the job to finish before answering. `0` (the default) answers at once. The answer is the same Job either way: still `queued` or `running` if the wait ran out."
+      }
+    ],
     "body": null,
     "idempotent": false,
     "idempotencyRequired": false,
