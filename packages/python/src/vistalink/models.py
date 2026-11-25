@@ -360,6 +360,13 @@ class CancellationPenalty(BaseModel):
     model_config = ConfigDict(
         extra="allow",
     )
+    kind: Annotated[
+        str | None,
+        Field(
+            description="What the charge is for: `cancellation`, or `no_show` for the fee charged when the guest does not arrive. Null when the source does not say; read null as `cancellation`. Other values may appear. Only cancellation charges decide `cancellation_type`.",
+            title="Kind",
+        ),
+    ] = None
     starts_at: Annotated[
         AwareDatetime | None,
         Field(

@@ -1617,6 +1617,11 @@ export interface components {
          */
         CancellationPenalty: {
             /**
+             * Kind
+             * @description What the charge is for: `cancellation`, or `no_show` for the fee charged when the guest does not arrive. Null when the source does not say; read null as `cancellation`. Other values may appear. Only cancellation charges decide `cancellation_type`.
+             */
+            kind?: string | null;
+            /**
              * Starts At
              * @description Moment from which this charge applies, RFC 3339; null when the source gave no moment that resolves to an instant, or when the charge applies from booking.
              */

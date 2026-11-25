@@ -4579,6 +4579,18 @@
       },
       "CancellationPenalty": {
         "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind",
+            "description": "What the charge is for: `cancellation`, or `no_show` for the fee charged when the guest does not arrive. Null when the source does not say; read null as `cancellation`. Other values may appear. Only cancellation charges decide `cancellation_type`."
+          },
           "starts_at": {
             "anyOf": [
               {
