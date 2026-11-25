@@ -2025,7 +2025,7 @@ class Offer(BaseModel):
     cancellation_type: Annotated[
         Literal["free", "non_refundable", "partial"] | None,
         Field(
-            description="What canceling costs at the time of this response. `free`: no charge (the deadline, if any, has not passed). `non_refundable`: the whole stay, because the source says so or its penalty is the whole stay. `partial`: less than the whole stay, or a fee the source does not size. Null when unknown: a rate that is not free and states no penalty is null, not `non_refundable`.",
+            description="What canceling costs at the time of this response. `free`: no charge (the deadline, if any, has not passed). `non_refundable`: the whole stay, because the source says so or its penalty is the whole stay. `partial`: a stated penalty smaller than the whole stay. Null when unknown: a rate that is not free and states no penalty, or a penalty whose size cannot be compared with the stay (a percentage with no stated base, or of the prepayment), is null, never `non_refundable` or `partial`; the step itself is in `cancellation_penalties`.",
             title="Cancellation Type",
         ),
     ] = None
