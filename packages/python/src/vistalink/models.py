@@ -1959,7 +1959,7 @@ class Offer(BaseModel):
     base_total: Annotated[
         str | None,
         Field(
-            description="Stay price before taxes and mandatory fees, a decimal string in `currency`. Set only when it and the stated `tax_total` and `fee_total` add up to `total`; null when the source gives only an inclusive figure or the parts leave a remainder.",
+            description="Stay price before what the source classes as tax and as separate fees, a decimal string in `currency`. Set only when it and the stated `tax_total` and `fee_total` add up to `total`; `base_total` with `tax_total` and no `fee_total` is a complete split. Null when the source gives only an inclusive figure or the parts leave a remainder.",
             pattern="^-?\\d+(\\.\\d+)?$",
             title="Base Total",
         ),
@@ -1967,7 +1967,7 @@ class Offer(BaseModel):
     tax_total: Annotated[
         str | None,
         Field(
-            description="Taxes for the whole stay, a decimal string in `currency`; null when the source does not state the amount. Never computed from a tax rate.",
+            description="Everything the source itself classes as tax, for the whole stay, a decimal string in `currency`. On some booking engines that includes service charge and local levies as well as VAT or sales tax; `taxes` lists the lines when the source gives them. Null when the source does not state the amount. Never computed from a tax rate.",
             pattern="^-?\\d+(\\.\\d+)?$",
             title="Tax Total",
         ),
@@ -1975,7 +1975,7 @@ class Offer(BaseModel):
     fee_total: Annotated[
         str | None,
         Field(
-            description="Mandatory fees for the whole stay other than taxes, such as a resort fee, a decimal string in `currency`; null when the source does not state the amount. Like `tax_total`, it is a part of `total`: neither is served when `includes_taxes` is false.",
+            description="Mandatory fees the source lists separately from tax, such as a resort fee, for the whole stay, a decimal string in `currency`. Null when the source does not separate fees: null is not zero, and such fees may then be inside `tax_total` or `base_total`. Like `tax_total`, it is a part of `total`: neither is served when `includes_taxes` is false.",
             pattern="^-?\\d+(\\.\\d+)?$",
             title="Fee Total",
         ),
