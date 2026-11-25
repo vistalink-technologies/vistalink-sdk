@@ -26,7 +26,7 @@ def test_the_spec_example_parses_with_every_field():
     assert offer.rate_plan_code == "FLEXBB" and offer.rooms_left == 3
     assert (offer.base_total, offer.tax_total, offer.fee_total) == ("860.00", "86.00", "16.00")
     assert offer.taxes[0].code == "VAT" and offer.fees[0].name == "City tax"
-    assert offer.cancellation_deadline_local == "2026-11-12T18:00:00" and offer.hotel_timezone == "Europe/Rome"
+    assert offer.cancellation_deadline_local == "2027-05-12T18:00:00" and offer.hotel_timezone == "Europe/Rome"
     assert offer.cancellation_penalties[0].nights == 1.0
     assert offer.guarantee_required is True
 

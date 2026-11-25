@@ -790,13 +790,13 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
-         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
          *           {
          *             "nights": 1,
-         *             "starts_at": "2026-11-12T17:00:00Z",
-         *             "starts_local": "2026-11-12T18:00:00"
+         *             "starts_at": "2027-05-12T16:00:00Z",
+         *             "starts_local": "2027-05-12T18:00:00"
          *           }
          *         ],
          *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -841,7 +841,7 @@ export interface components {
          *           }
          *         ],
          *         "total": "962.00",
-         *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *         "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *       },
          *       "revalidation": {
          *         "checked_at": "2026-10-07T09:30:00Z",
@@ -872,13 +872,13 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
-         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
          *           {
          *             "nights": 1,
-         *             "starts_at": "2026-11-12T17:00:00Z",
-         *             "starts_local": "2026-11-12T18:00:00"
+         *             "starts_at": "2027-05-12T16:00:00Z",
+         *             "starts_local": "2027-05-12T18:00:00"
          *           }
          *         ],
          *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -923,7 +923,7 @@ export interface components {
          *           }
          *         ],
          *         "total": "962.00",
-         *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *         "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *       },
          *       "payment": {
          *         "amount": "962.00",
@@ -973,13 +973,13 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
-         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
          *           {
          *             "nights": 1,
-         *             "starts_at": "2026-11-12T17:00:00Z",
-         *             "starts_local": "2026-11-12T18:00:00"
+         *             "starts_at": "2027-05-12T16:00:00Z",
+         *             "starts_local": "2027-05-12T18:00:00"
          *           }
          *         ],
          *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -1024,7 +1024,7 @@ export interface components {
          *           }
          *         ],
          *         "total": "962.00",
-         *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *         "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *       },
          *       "revalidation": {
          *         "checked_at": "2026-10-07T09:30:00Z",
@@ -1081,13 +1081,13 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
-         *         "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *         "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
          *           {
          *             "nights": 1,
-         *             "starts_at": "2026-11-12T17:00:00Z",
-         *             "starts_local": "2026-11-12T18:00:00"
+         *             "starts_at": "2027-05-12T16:00:00Z",
+         *             "starts_local": "2027-05-12T18:00:00"
          *           }
          *         ],
          *         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -1132,7 +1132,7 @@ export interface components {
          *           }
          *         ],
          *         "total": "962.00",
-         *         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *         "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *       },
          *       "payment_method": {
          *         "brand": "visa",
@@ -1459,8 +1459,8 @@ export interface components {
          *       },
          *       "special_requests": "Late arrival",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -1491,8 +1491,8 @@ export interface components {
          *       },
          *       "special_requests": "Late arrival",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -1536,8 +1536,8 @@ export interface components {
          *       },
          *       "special_requests": "Late arrival",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -2808,13 +2808,13 @@ export interface components {
          *                 "availability": "available",
          *                 "base_total": "860.00",
          *                 "board": "breakfast",
-         *                 "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *                 "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                 "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *                 "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                 "cancellation_penalties": [
          *                   {
          *                     "nights": 1,
-         *                     "starts_at": "2026-11-12T17:00:00Z",
-         *                     "starts_local": "2026-11-12T18:00:00"
+         *                     "starts_at": "2027-05-12T16:00:00Z",
+         *                     "starts_local": "2027-05-12T18:00:00"
          *                   }
          *                 ],
          *                 "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -2859,15 +2859,15 @@ export interface components {
          *                   }
          *                 ],
          *                 "total": "962.00",
-         *                 "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *                 "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *               }
          *             ],
          *             "status": "observed"
          *           }
          *         ],
          *         "stay": {
-         *           "check_in": "2026-11-14",
-         *           "check_out": "2026-11-16",
+         *           "check_in": "2027-05-14",
+         *           "check_out": "2027-05-16",
          *           "rooms": [
          *             {
          *               "adults": 2,
@@ -2911,13 +2911,13 @@ export interface components {
          *               "availability": "available",
          *               "base_total": "860.00",
          *               "board": "breakfast",
-         *               "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *               "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *               "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *               "cancellation_deadline_local": "2027-05-12T18:00:00",
          *               "cancellation_penalties": [
          *                 {
          *                   "nights": 1,
-         *                   "starts_at": "2026-11-12T17:00:00Z",
-         *                   "starts_local": "2026-11-12T18:00:00"
+         *                   "starts_at": "2027-05-12T16:00:00Z",
+         *                   "starts_local": "2027-05-12T18:00:00"
          *                 }
          *               ],
          *               "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -2962,7 +2962,7 @@ export interface components {
          *                 }
          *               ],
          *               "total": "962.00",
-         *               "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *               "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *             }
          *           ],
          *           "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b",
@@ -3256,13 +3256,13 @@ export interface components {
          *                         "availability": "available",
          *                         "base_total": "860.00",
          *                         "board": "breakfast",
-         *                         "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *                         "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                         "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *                         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                         "cancellation_penalties": [
          *                           {
          *                             "nights": 1,
-         *                             "starts_at": "2026-11-12T17:00:00Z",
-         *                             "starts_local": "2026-11-12T18:00:00"
+         *                             "starts_at": "2027-05-12T16:00:00Z",
+         *                             "starts_local": "2027-05-12T18:00:00"
          *                           }
          *                         ],
          *                         "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -3307,7 +3307,7 @@ export interface components {
          *                           }
          *                         ],
          *                         "total": "962.00",
-         *                         "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *                         "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *                       }
          *                     ],
          *                     "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b"
@@ -3543,12 +3543,12 @@ export interface components {
         Occupancy: {
             /**
              * Adults
-             * @description Adults in the room.
+             * @description Adults in the party, counted across all rooms.
              */
             adults: number;
             /**
              * Children Ages
-             * @description Age of each child in the room; empty for adults only.
+             * @description Age of each child in the party, across all rooms; empty for adults only.
              */
             children_ages?: number[];
         };
@@ -3581,13 +3581,13 @@ export interface components {
          *       "availability": "available",
          *       "base_total": "860.00",
          *       "board": "breakfast",
-         *       "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *       "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *       "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *       "cancellation_deadline_local": "2027-05-12T18:00:00",
          *       "cancellation_penalties": [
          *         {
          *           "nights": 1,
-         *           "starts_at": "2026-11-12T17:00:00Z",
-         *           "starts_local": "2026-11-12T18:00:00"
+         *           "starts_at": "2027-05-12T16:00:00Z",
+         *           "starts_local": "2027-05-12T18:00:00"
          *         }
          *       ],
          *       "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -3632,7 +3632,7 @@ export interface components {
          *         }
          *       ],
          *       "total": "962.00",
-         *       "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *       "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *     }
          */
         Offer: {
@@ -3679,7 +3679,7 @@ export interface components {
             rate_plan_code?: string | null;
             /**
              * Total
-             * @description Price for the whole stay and the whole party, a decimal string in `currency`; taxes the source quoted separately are added in when their amount is known. `"0"` when sold out.
+             * @description What the guest pays for the whole stay and the whole party, a decimal string in `currency`. It includes every tax and mandatory fee whose amount the source states; anything listed in `excluded_charges` is not in it. `"0"` when sold out.
              */
             total: string;
             /**
@@ -3694,12 +3694,12 @@ export interface components {
             nightly_avg?: string | null;
             /**
              * Includes Taxes
-             * @description True when `total` includes taxes and fees, false when some are listed in `excluded_charges`, null when the source does not say.
+             * @description True when `total` includes all taxes and fees. False when the source says some are charged on top: those with a known amount are listed in `excluded_charges`, and an empty list then means the source did not state the amount. Null when the source does not say.
              */
             includes_taxes?: boolean | null;
             /**
              * Excluded Charges
-             * @description Charges payable on top of `total`; usually empty.
+             * @description Charges payable on top of `total`, never already inside it; usually empty.
              */
             excluded_charges?: components["schemas"]["ExcludedCharge"][];
             /**
@@ -3820,7 +3820,7 @@ export interface components {
             field: "location" | "stay" | "budget" | "hotel_name";
             /**
              * Query Said
-             * @description The value read from the query, for example `Paris` or `2026-11-14/2026-11-16`.
+             * @description The value read from the query, for example `Paris` or `2027-05-14/2027-05-16`.
              */
             query_said?: string | null;
             /**
@@ -4064,8 +4064,8 @@ export interface components {
          *       "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
          *       "status": "waiting",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -4114,8 +4114,8 @@ export interface components {
          *       "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
          *       "status": "offer_received",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -4166,8 +4166,8 @@ export interface components {
          *       "quote_id": "qte_7c2e9a4b1d8f3e6a0c5b",
          *       "status": "accepted",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -4484,8 +4484,8 @@ export interface components {
          *       "locale": "en",
          *       "price_to_beat": "auto",
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -4508,8 +4508,8 @@ export interface components {
          *         "total": "962.00"
          *       },
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -4860,8 +4860,8 @@ export interface components {
          *       ],
          *       "stays": [
          *         {
-         *           "check_in": "2026-11-14",
-         *           "check_out": "2026-11-16",
+         *           "check_in": "2027-05-14",
+         *           "check_out": "2027-05-16",
          *           "rooms": [
          *             {
          *               "adults": 2,
@@ -4924,8 +4924,8 @@ export interface components {
          *       ],
          *       "max_age_hours": 24,
          *       "stay": {
-         *         "check_in": "2026-11-14",
-         *         "check_out": "2026-11-16",
+         *         "check_in": "2027-05-14",
+         *         "check_out": "2027-05-16",
          *         "rooms": [
          *           {
          *             "adults": 2,
@@ -4952,7 +4952,7 @@ export interface components {
             channel?: "direct" | "third_party";
             /**
              * Freshness
-             * @description `cached` answers now from stored prices; `live` reads the booking engines and answers 202 with a job (Build plan or higher).
+             * @description `cached` answers now from stored prices; `live` reads the booking engines and answers 202 with a job (Build plan or higher). Stored direct prices exist for one party only: 2 adults in 1 room, no children. Any other party reads `unknown` on `cached` unless a live read priced it recently, so use `live` for it.
              * @default cached
              * @enum {string}
              */
@@ -4997,13 +4997,13 @@ export interface components {
          *                   "availability": "available",
          *                   "base_total": "860.00",
          *                   "board": "breakfast",
-         *                   "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *                   "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                   "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *                   "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                   "cancellation_penalties": [
          *                     {
          *                       "nights": 1,
-         *                       "starts_at": "2026-11-12T17:00:00Z",
-         *                       "starts_local": "2026-11-12T18:00:00"
+         *                       "starts_at": "2027-05-12T16:00:00Z",
+         *                       "starts_local": "2027-05-12T18:00:00"
          *                     }
          *                   ],
          *                   "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -5048,7 +5048,7 @@ export interface components {
          *                     }
          *                   ],
          *                   "total": "962.00",
-         *                   "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *                   "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *                 }
          *               ],
          *               "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b"
@@ -6289,8 +6289,8 @@ export interface components {
          *         },
          *         "min_stars": 4,
          *         "stay": {
-         *           "check_in": "2026-11-14",
-         *           "check_out": "2026-11-16",
+         *           "check_in": "2027-05-14",
+         *           "check_out": "2027-05-16",
          *           "rooms": [
          *             {
          *               "adults": 2,
@@ -6463,8 +6463,8 @@ export interface components {
          *         },
          *         "overrides": [],
          *         "stay": {
-         *           "check_in": "2026-11-14",
-         *           "check_out": "2026-11-16",
+         *           "check_in": "2027-05-14",
+         *           "check_out": "2027-05-16",
          *           "origin": "filters",
          *           "rooms": [
          *             {
@@ -7259,8 +7259,8 @@ export interface components {
          *                       "availability": "available",
          *                       "base_total": "860.00",
          *                       "board": "breakfast",
-         *                       "cancellation_deadline": "2026-11-12T17:00:00Z",
-         *                       "cancellation_deadline_local": "2026-11-12T18:00:00",
+         *                       "cancellation_deadline": "2027-05-12T16:00:00Z",
+         *                       "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                       "cancellation_penalties": [
          *                         {
          *                           "amount": null,
@@ -7269,8 +7269,8 @@ export interface components {
          *                           "nights": 1,
          *                           "percent": null,
          *                           "percent_of": null,
-         *                           "starts_at": "2026-11-12T17:00:00Z",
-         *                           "starts_local": "2026-11-12T18:00:00"
+         *                           "starts_at": "2027-05-12T16:00:00Z",
+         *                           "starts_local": "2027-05-12T18:00:00"
          *                         }
          *                       ],
          *                       "cancellation_policy": "Cancel free of charge until 18:00 two days before arrival. After that the first night is charged.",
@@ -7315,7 +7315,7 @@ export interface components {
          *                         }
          *                       ],
          *                       "total": "962.00",
-         *                       "url": "https://umilta36.com/book?checkin=2026-11-14&checkout=2026-11-16"
+         *                       "url": "https://umilta36.com/book?checkin=2027-05-14&checkout=2027-05-16"
          *                     }
          *                   ],
          *                   "room_id": "5b1e2f3a-0c4d-4e5f-8a9b-1c2d3e4f5a6b"
@@ -7597,12 +7597,12 @@ export interface operations {
                 sections?: string | null;
                 /**
                  * @description Arrival date, YYYY-MM-DD; rates are only returned when both dates are set.
-                 * @example 2026-11-14
+                 * @example 2027-05-14
                  */
                 check_in?: string;
                 /**
                  * @description Departure date, YYYY-MM-DD, after `check_in` and sent together with it.
-                 * @example 2026-11-16
+                 * @example 2027-05-16
                  */
                 check_out?: string;
                 /**
@@ -7806,6 +7806,11 @@ export interface operations {
                  * @example 4f1c2b8e-booking-ada-rossi
                  */
                 "Idempotency-Key"?: string;
+                /**
+                 * @description `wait=N` (whole seconds, 0 to 25) on a `freshness: live` request holds the response for up to N seconds. A job that finishes in that time answers 200 with the finished job, result included, and `Preference-Applied: wait=N`; otherwise the answer is the usual 202, and `GET /v2/jobs/{job_id}?wait=25` waits for the rest. Ignored on `cached`.
+                 * @example wait=25
+                 */
+                Prefer?: string;
             };
             path?: never;
             cookie?: never;

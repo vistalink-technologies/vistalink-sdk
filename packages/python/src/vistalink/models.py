@@ -1831,11 +1831,16 @@ class Occupancy(BaseModel):
     model_config = ConfigDict(
         extra="allow",
     )
-    adults: Annotated[int, Field(description="Adults in the room.", title="Adults")]
+    adults: Annotated[
+        int,
+        Field(
+            description="Adults in the party, counted across all rooms.", title="Adults"
+        ),
+    ]
     children_ages: Annotated[
         list[int] | None,
         Field(
-            description="Age of each child in the room; empty for adults only.",
+            description="Age of each child in the party, across all rooms; empty for adults only.",
             title="Children Ages",
         ),
     ] = None
@@ -1931,7 +1936,7 @@ class Offer(BaseModel):
     total: Annotated[
         str,
         Field(
-            description='Price for the whole stay and the whole party, a decimal string in `currency`; taxes the source quoted separately are added in when their amount is known. `"0"` when sold out.',
+            description='What the guest pays for the whole stay and the whole party, a decimal string in `currency`. It includes every tax and mandatory fee whose amount the source states; anything listed in `excluded_charges` is not in it. `"0"` when sold out.',
             pattern="^-?\\d+(\\.\\d+)?$",
             title="Total",
         ),
@@ -1955,14 +1960,14 @@ class Offer(BaseModel):
     includes_taxes: Annotated[
         bool | None,
         Field(
-            description="True when `total` includes taxes and fees, false when some are listed in `excluded_charges`, null when the source does not say.",
+            description="True when `total` includes all taxes and fees. False when the source says some are charged on top: those with a known amount are listed in `excluded_charges`, and an empty list then means the source did not state the amount. Null when the source does not say.",
             title="Includes Taxes",
         ),
     ] = None
     excluded_charges: Annotated[
         list[ExcludedCharge] | None,
         Field(
-            description="Charges payable on top of `total`; usually empty.",
+            description="Charges payable on top of `total`, never already inside it; usually empty.",
             title="Excluded Charges",
         ),
     ] = None
@@ -2133,7 +2138,7 @@ class Override(BaseModel):
     query_said: Annotated[
         str | None,
         Field(
-            description="The value read from the query, for example `Paris` or `2026-11-14/2026-11-16`.",
+            description="The value read from the query, for example `Paris` or `2027-05-14/2027-05-16`.",
             title="Query Said",
         ),
     ] = None
@@ -5423,7 +5428,7 @@ class RatesRequest(BaseModel):
     freshness: Annotated[
         Literal["cached", "live"] | None,
         Field(
-            description="`cached` answers now from stored prices; `live` reads the booking engines and answers 202 with a job (Build plan or higher).",
+            description="`cached` answers now from stored prices; `live` reads the booking engines and answers 202 with a job (Build plan or higher). Stored direct prices exist for one party only: 2 adults in 1 room, no children. Any other party reads `unknown` on `cached` unless a live read priced it recently, so use `live` for it.",
             title="Freshness",
         ),
     ] = "cached"
