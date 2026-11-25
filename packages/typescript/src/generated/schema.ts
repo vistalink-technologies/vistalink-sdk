@@ -3714,7 +3714,7 @@ export interface components {
             tax_total?: string | null;
             /**
              * Fee Total
-             * @description Mandatory fees for the whole stay other than taxes, such as a resort fee, a decimal string in `currency`; null when the source does not state the amount.
+             * @description Mandatory fees for the whole stay other than taxes, such as a resort fee, a decimal string in `currency`; null when the source does not state the amount. Like `tax_total`, it is a part of `total`: neither is served when `includes_taxes` is false.
              */
             fee_total?: string | null;
             /**
@@ -3754,12 +3754,12 @@ export interface components {
             cancellation_type?: ("free" | "non_refundable" | "partial") | null;
             /**
              * Cancellation Deadline
-             * @description Last moment to cancel free of charge, an RFC 3339 instant. Null when the rate has no free cancellation, when the source states no deadline, or when it states one that cannot be placed in time, such as a day with no time zone; `cancellation_deadline_local` then still carries it.
+             * @description Last moment to cancel free of charge, an RFC 3339 instant. Null when the rate has no free cancellation, when the source states no deadline, when it names only a day (no time of day is invented), or when it states a hotel-clock time and the hotel's time zone is not known; `cancellation_deadline_local` then still carries it.
              */
             cancellation_deadline?: string | null;
             /**
              * Cancellation Deadline Local
-             * @description The free-cancellation deadline on the hotel's clock: `YYYY-MM-DDTHH:MM:SS`, or `YYYY-MM-DD` when the source named only a day. Set whenever the source states a deadline; null otherwise.
+             * @description The free-cancellation deadline on the hotel's clock: `YYYY-MM-DDTHH:MM:SS`, or `YYYY-MM-DD` when the source named only a day. Set when the source states the deadline on the hotel's clock or as a day, and when it states an instant and `hotel_timezone` is known; null when there is no deadline, or only an instant and no known time zone.
              */
             cancellation_deadline_local?: string | null;
             /**

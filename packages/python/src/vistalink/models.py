@@ -30,9 +30,9 @@ class Amenity(BaseModel):
         ),
     ]
     kind: Annotated[
-        Literal["amenity", "group"] | None,
+        str | None,
         Field(
-            description="`amenity` for a single amenity, `group` for a code that matches any of its `members`.",
+            description='`amenity` for a single amenity, `group` for a code that matches any of its `members`. Values known when this SDK was built: `amenity`, `group`. The API may add values; treat one you do not know as "other".',
             title="Kind",
         ),
     ] = "amenity"
@@ -148,24 +148,9 @@ class BookingFailure(BaseModel):
         extra="allow",
     )
     reason: Annotated[
-        Literal[
-            "sold_out",
-            "price_changed",
-            "price_changed_at_payment",
-            "engine_blocked",
-            "handoff_expired",
-            "payment_expired",
-            "payment_failed",
-            "unsupported_engine",
-            "payment_unavailable",
-            "card_declined",
-            "three_d_secure_failed",
-            "card_entry_failed",
-            "card_entry_unavailable",
-            "mandate_expired",
-        ],
+        str,
         Field(
-            description="Stable failure code: `sold_out`, `price_changed` (revalidation, or with `card_entry` the hotel's checkout total was above the accepted total; nothing was typed), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`). `card_entry` only: `card_declined` (the hotel's checkout declined the card; create a new booking with a new credential), `three_d_secure_failed`, `card_entry_failed` (stopped before the pay button; nothing was charged), `card_entry_unavailable` (card entry is not available for this engine right now), and `mandate_expired` on `expired` (not confirmed within 30 minutes).",
+            description="Stable failure code: `sold_out`, `price_changed` (revalidation, or with `card_entry` the hotel's checkout total was above the accepted total; nothing was typed), `price_changed_at_payment` (the engine charged a different total after checkout), `engine_blocked`, `handoff_expired` (the guest left the session), `payment_expired`, `payment_failed`, `unsupported_engine` (the engine or offer cannot be booked in this mode), `payment_unavailable` (hosted checkout is not available; use `handoff`). `card_entry` only: `card_declined` (the hotel's checkout declined the card; create a new booking with a new credential), `three_d_secure_failed`, `card_entry_failed` (stopped before the pay button; nothing was charged), `card_entry_unavailable` (card entry is not available for this engine right now), and `mandate_expired` on `expired` (not confirmed within 30 minutes). Values known when this SDK was built: `sold_out`, `price_changed`, `price_changed_at_payment`, `engine_blocked`, `handoff_expired`, `payment_expired`, `payment_failed`, `unsupported_engine`, `payment_unavailable`, `card_declined`, `three_d_secure_failed`, `card_entry_failed`, `card_entry_unavailable`, `mandate_expired`. The API may add values; treat one you do not know as \"other\".",
             title="Reason",
         ),
     ]
@@ -1990,7 +1975,7 @@ class Offer(BaseModel):
     fee_total: Annotated[
         str | None,
         Field(
-            description="Mandatory fees for the whole stay other than taxes, such as a resort fee, a decimal string in `currency`; null when the source does not state the amount.",
+            description="Mandatory fees for the whole stay other than taxes, such as a resort fee, a decimal string in `currency`; null when the source does not state the amount. Like `tax_total`, it is a part of `total`: neither is served when `includes_taxes` is false.",
             pattern="^-?\\d+(\\.\\d+)?$",
             title="Fee Total",
         ),
@@ -2047,14 +2032,14 @@ class Offer(BaseModel):
     cancellation_deadline: Annotated[
         AwareDatetime | None,
         Field(
-            description="Last moment to cancel free of charge, an RFC 3339 instant. Null when the rate has no free cancellation, when the source states no deadline, or when it states one that cannot be placed in time, such as a day with no time zone; `cancellation_deadline_local` then still carries it.",
+            description="Last moment to cancel free of charge, an RFC 3339 instant. Null when the rate has no free cancellation, when the source states no deadline, when it names only a day (no time of day is invented), or when it states a hotel-clock time and the hotel's time zone is not known; `cancellation_deadline_local` then still carries it.",
             title="Cancellation Deadline",
         ),
     ] = None
     cancellation_deadline_local: Annotated[
         str | None,
         Field(
-            description="The free-cancellation deadline on the hotel's clock: `YYYY-MM-DDTHH:MM:SS`, or `YYYY-MM-DD` when the source named only a day. Set whenever the source states a deadline; null otherwise.",
+            description="The free-cancellation deadline on the hotel's clock: `YYYY-MM-DDTHH:MM:SS`, or `YYYY-MM-DD` when the source named only a day. Set when the source states the deadline on the hotel's clock or as a day, and when it states an instant and `hotel_timezone` is known; null when there is no deadline, or only an instant and no known time zone.",
             title="Cancellation Deadline Local",
         ),
     ] = None
@@ -3137,17 +3122,9 @@ class ResolveResult(BaseModel):
         ),
     ] = None
     basis: Annotated[
-        Literal[
-            "booking_slug",
-            "trusted_website_identity",
-            "website_host",
-            "expedia_id",
-            "name_city",
-            "hotel_id",
-        ]
-        | None,
+        str | None,
         Field(
-            description="What the match rests on, present only when resolved: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, or `hotel_id` when a uuid was passed through.",
+            description='What the match rests on, present only when resolved: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, or `hotel_id` when a uuid was passed through. Values known when this SDK was built: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, `hotel_id`. The API may add values; treat one you do not know as "other".',
             title="Basis",
         ),
     ] = None
@@ -3161,19 +3138,9 @@ class ResolveResult(BaseModel):
         ),
     ] = None
     reason: Annotated[
-        Literal[
-            "not_found",
-            "ambiguous_website",
-            "unparseable_booking_url",
-            "unparseable_website_url",
-            "unparseable_expedia_url",
-            "invalid_hotel_id",
-            "expedia_not_ingested",
-            "not_indexed",
-        ]
-        | None,
+        str | None,
         Field(
-            description="Why the input did not resolve; absent when `resolved`. `not_found`, `ambiguous_website` (the host belongs to several hotels), `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url` or `invalid_hotel_id` with `unresolved`; `expedia_not_ingested` with `unsupported`; `not_indexed` with `known_unindexed`.",
+            description='Why the input did not resolve; absent when `resolved`. `not_found`, `ambiguous_website` (the host belongs to several hotels), `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url` or `invalid_hotel_id` with `unresolved`; `expedia_not_ingested` with `unsupported`; `not_indexed` with `known_unindexed`. Values known when this SDK was built: `not_found`, `ambiguous_website`, `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url`, `invalid_hotel_id`, `expedia_not_ingested`, `not_indexed`. The API may add values; treat one you do not know as "other".',
             title="Reason",
         ),
     ] = None
@@ -4851,9 +4818,9 @@ class Job(BaseModel):
         Field(description="Job id, `job_` plus 12 letters and digits.", title="Job Id"),
     ]
     kind: Annotated[
-        Literal["rates.live", "rates.batch", "rooms.reconcile"],
+        str,
         Field(
-            description="`rates.live` (from `POST /v2/rates` or `rates=refresh`), `rates.batch` or `rooms.reconcile`.",
+            description='`rates.live` (from `POST /v2/rates` or `rates=refresh`), `rates.batch` or `rooms.reconcile`. Values known when this SDK was built: `rates.live`, `rates.batch`, `rooms.reconcile`. The API may add values; treat one you do not know as "other".',
             title="Kind",
         ),
     ]
@@ -5077,23 +5044,9 @@ class Quote(BaseModel):
         ),
     ] = None
     failure_reason: Annotated[
-        Literal[
-            "no_contact_email",
-            "hotel_suppressed",
-            "hotel_daily_ceiling",
-            "invalid_stay",
-            "invalid_request",
-            "opted_out",
-            "unreachable",
-            "rejected",
-            "no_contact",
-            "no_contact_phone",
-            "phone_unavailable",
-            "do_not_call",
-        ]
-        | None,
+        str | None,
         Field(
-            description="Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable`, `rejected`, or for calls `no_contact` (neither an email address nor a phone number), `no_contact_phone`, `phone_unavailable` or `do_not_call`; null otherwise.",
+            description='Why the quote ended without offers when `status` is `failed` or `declined`: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling` (try again tomorrow), `invalid_stay`, `opted_out`, `unreachable`, `rejected`, or for calls `no_contact` (neither an email address nor a phone number), `no_contact_phone`, `phone_unavailable` or `do_not_call`; null otherwise. Values known when this SDK was built: `no_contact_email`, `hotel_suppressed`, `hotel_daily_ceiling`, `invalid_stay`, `invalid_request`, `opted_out`, `unreachable`, `rejected`, `no_contact`, `no_contact_phone`, `phone_unavailable`, `do_not_call`. The API may add values; treat one you do not know as "other".',
             title="Failure Reason",
         ),
     ] = None
@@ -5273,27 +5226,9 @@ class RateResult(BaseModel):
         ),
     ]
     reason: Annotated[
-        Literal[
-            "not_found",
-            "ambiguous_website",
-            "unparseable_booking_url",
-            "unparseable_website_url",
-            "unparseable_expedia_url",
-            "invalid_hotel_id",
-            "expedia_not_ingested",
-            "not_indexed",
-            "sold_out",
-            "member_only",
-            "limit",
-            "min_stay",
-            "engine_blocked",
-            "engine_timeout",
-            "engine_failed",
-            "engine_not_live_enabled",
-        ]
-        | None,
+        str | None,
         Field(
-            description="Why this hotel has no priced offer, or why the input did not resolve. On `unresolved`, the `POST /v2/hotels/resolve` reason (`invalid_hotel_id`, `not_found`, `not_indexed`, …). On `unsupported`, `engine_not_live_enabled`. On `unknown`: `engine_blocked` (an edge block, or a cancel after blocks — not a timeout), `engine_timeout`, `engine_failed`, or a reason the booking engine stated (`sold_out`, `member_only`, `limit`, `min_stay`, `not_found`). The same codes are served on a cached read when that is why there is no price. On `observed` with no rooms, `sold_out` — the engine said nothing is available, and that result is billed. Null on a priced result and on a cached miss with no recorded cause.",
+            description='Why this hotel has no priced offer, or why the input did not resolve. On `unresolved`, the `POST /v2/hotels/resolve` reason (`invalid_hotel_id`, `not_found`, `not_indexed`, …). On `unsupported`, `engine_not_live_enabled`. On `unknown`: `engine_blocked` (an edge block, or a cancel after blocks — not a timeout), `engine_timeout`, `engine_failed`, or a reason the booking engine stated (`sold_out`, `member_only`, `limit`, `min_stay`, `not_found`). The same codes are served on a cached read when that is why there is no price. On `observed` with no rooms, `sold_out` — the engine said nothing is available, and that result is billed. Null on a priced result and on a cached miss with no recorded cause. Values known when this SDK was built: `not_found`, `ambiguous_website`, `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url`, `invalid_hotel_id`, `expedia_not_ingested`, `not_indexed`, `sold_out`, `member_only`, `limit`, `min_stay`, `engine_blocked`, `engine_timeout`, `engine_failed`, `engine_not_live_enabled`. The API may add values; treat one you do not know as "other".',
             title="Reason",
         ),
     ] = None
@@ -5323,19 +5258,10 @@ class RateResult(BaseModel):
         ),
     ] = None
     no_price_reason: Annotated[
-        Literal[
-            "sold_out",
-            "member_only",
-            "limit",
-            "min_stay",
-            "not_found",
-            "engine_blocked",
-            "timeout",
-        ]
-        | None,
+        str | None,
         Field(
             deprecated=True,
-            description="Deprecated; read `reason`. Kept with the values it shipped with: `sold_out`, `member_only`, `limit`, `min_stay`, `not_found`, `engine_blocked` and `timeout` (which `reason` spells `engine_timeout`). Null when `reason` is null and when `reason` is a code this field never had (`engine_failed`, `engine_not_live_enabled`, the resolve reasons on `unresolved`).",
+            description='Deprecated; read `reason`. Kept with the values it shipped with: `sold_out`, `member_only`, `limit`, `min_stay`, `not_found`, `engine_blocked` and `timeout` (which `reason` spells `engine_timeout`). Null when `reason` is null and when `reason` is a code this field never had (`engine_failed`, `engine_not_live_enabled`, the resolve reasons on `unresolved`). Values known when this SDK was built: `sold_out`, `member_only`, `limit`, `min_stay`, `not_found`, `engine_blocked`, `timeout`. The API may add values; treat one you do not know as "other".',
             title="No Price Reason",
         ),
     ] = None

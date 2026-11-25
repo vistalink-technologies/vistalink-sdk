@@ -152,6 +152,14 @@ Neither registry needs a long-lived token after the reservation.
 
 ## Status and known gaps
 
+- **Open vocabularies (Python).** The API adds values to some response fields without a new major:
+  `reason`, `no_price_reason`, `failure_reason`, `basis`, `resolved_basis`, `kind`. In the Python
+  models those are plain `str` (the values known at build time are in the field description), so
+  a value this build has never seen is accepted instead of failing validation of the whole
+  response. Request models keep closed enums. TypeScript types list the known values as a union;
+  nothing is checked at run time, so an unknown value arrives as a string outside the union:
+  write a `default` branch.
+
 - The SDKs are generated from the API's published spec, `https://api.vistalink.com/v2/openapi.json`.
 - When `Job.result_url` is null, the result is downloaded from
   `GET /v2/jobs/{id}/result` with the API key. A signed `result_url` elsewhere
