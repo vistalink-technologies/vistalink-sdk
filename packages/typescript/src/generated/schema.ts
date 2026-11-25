@@ -3739,7 +3739,7 @@ export interface components {
             board?: ("none" | "breakfast" | "half" | "full" | "all_inclusive") | null;
             /**
              * Free Cancellation
-             * @description True when the rate can be canceled free of charge, false when it is non-refundable, null when unknown.
+             * @description The rate's own term: true when it can be canceled free of charge (until `cancellation_deadline` when one is given), false when canceling carries a charge, null when unknown. False does not mean non-refundable; `cancellation_type` says what canceling costs now.
              */
             free_cancellation?: boolean | null;
             /**
@@ -3749,7 +3749,7 @@ export interface components {
             member_rate?: boolean | null;
             /**
              * Cancellation Type
-             * @description `free` when the rate can be canceled at no charge until `cancellation_deadline`, `non_refundable` when canceling costs the whole stay, `partial` when it can be canceled for a charge smaller than the whole stay; null when unknown.
+             * @description What canceling costs at the time of this response. `free`: no charge (the deadline, if any, has not passed). `non_refundable`: the whole stay, because the source says so or its penalty is the whole stay. `partial`: less than the whole stay, or a fee the source does not size. Null when unknown: a rate that is not free and states no penalty is null, not `non_refundable`.
              */
             cancellation_type?: ("free" | "non_refundable" | "partial") | null;
             /**
