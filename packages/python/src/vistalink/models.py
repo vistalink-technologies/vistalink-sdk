@@ -2011,8 +2011,15 @@ class Offer(BaseModel):
     board: Annotated[
         Literal["none", "breakfast", "half", "full", "all_inclusive"] | None,
         Field(
-            description="Meals included: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source does not say.",
+            description="The meal plan the source states: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source states no meal plan. A source that only says breakfast is included sets `breakfast_included`, not this.",
             title="Board",
+        ),
+    ] = None
+    breakfast_included: Annotated[
+        bool | None,
+        Field(
+            description="The source's own statement that breakfast is included in the rate: true, false, or null when it does not say. A separate fact from `board` and never derived from it: a rate can read `breakfast_included: true` with `board: null` (breakfast at least; the source named no meal plan), and `board: half` with `breakfast_included: null`.",
+            title="Breakfast Included",
         ),
     ] = None
     free_cancellation: Annotated[

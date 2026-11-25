@@ -790,6 +790,7 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "breakfast_included": true,
          *         "cancellation_deadline": "2027-05-12T16:00:00Z",
          *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
@@ -872,6 +873,7 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "breakfast_included": true,
          *         "cancellation_deadline": "2027-05-12T16:00:00Z",
          *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
@@ -973,6 +975,7 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "breakfast_included": true,
          *         "cancellation_deadline": "2027-05-12T16:00:00Z",
          *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
@@ -1081,6 +1084,7 @@ export interface components {
          *         "availability": "available",
          *         "base_total": "860.00",
          *         "board": "breakfast",
+         *         "breakfast_included": true,
          *         "cancellation_deadline": "2027-05-12T16:00:00Z",
          *         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *         "cancellation_penalties": [
@@ -2813,6 +2817,7 @@ export interface components {
          *                 "availability": "available",
          *                 "base_total": "860.00",
          *                 "board": "breakfast",
+         *                 "breakfast_included": true,
          *                 "cancellation_deadline": "2027-05-12T16:00:00Z",
          *                 "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                 "cancellation_penalties": [
@@ -2916,6 +2921,7 @@ export interface components {
          *               "availability": "available",
          *               "base_total": "860.00",
          *               "board": "breakfast",
+         *               "breakfast_included": true,
          *               "cancellation_deadline": "2027-05-12T16:00:00Z",
          *               "cancellation_deadline_local": "2027-05-12T18:00:00",
          *               "cancellation_penalties": [
@@ -3261,6 +3267,7 @@ export interface components {
          *                         "availability": "available",
          *                         "base_total": "860.00",
          *                         "board": "breakfast",
+         *                         "breakfast_included": true,
          *                         "cancellation_deadline": "2027-05-12T16:00:00Z",
          *                         "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                         "cancellation_penalties": [
@@ -3586,6 +3593,7 @@ export interface components {
          *       "availability": "available",
          *       "base_total": "860.00",
          *       "board": "breakfast",
+         *       "breakfast_included": true,
          *       "cancellation_deadline": "2027-05-12T16:00:00Z",
          *       "cancellation_deadline_local": "2027-05-12T18:00:00",
          *       "cancellation_penalties": [
@@ -3739,9 +3747,14 @@ export interface components {
             rooms_left?: number | null;
             /**
              * Board
-             * @description Meals included: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source does not say.
+             * @description The meal plan the source states: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source states no meal plan. A source that only says breakfast is included sets `breakfast_included`, not this.
              */
             board?: ("none" | "breakfast" | "half" | "full" | "all_inclusive") | null;
+            /**
+             * Breakfast Included
+             * @description The source's own statement that breakfast is included in the rate: true, false, or null when it does not say. A separate fact from `board` and never derived from it: a rate can read `breakfast_included: true` with `board: null` (breakfast at least; the source named no meal plan), and `board: half` with `breakfast_included: null`.
+             */
+            breakfast_included?: boolean | null;
             /**
              * Free Cancellation
              * @description The rate's own term: true when it can be canceled free of charge (until `cancellation_deadline` when one is given), false when canceling carries a charge, null when unknown. False does not mean non-refundable; `cancellation_type` says what canceling costs now.
@@ -5002,6 +5015,7 @@ export interface components {
          *                   "availability": "available",
          *                   "base_total": "860.00",
          *                   "board": "breakfast",
+         *                   "breakfast_included": true,
          *                   "cancellation_deadline": "2027-05-12T16:00:00Z",
          *                   "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                   "cancellation_penalties": [
@@ -7264,6 +7278,7 @@ export interface components {
          *                       "availability": "available",
          *                       "base_total": "860.00",
          *                       "board": "breakfast",
+         *                       "breakfast_included": true,
          *                       "cancellation_deadline": "2027-05-12T16:00:00Z",
          *                       "cancellation_deadline_local": "2027-05-12T18:00:00",
          *                       "cancellation_penalties": [

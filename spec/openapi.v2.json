@@ -3562,6 +3562,7 @@
               "availability": "available",
               "base_total": "860.00",
               "board": "breakfast",
+              "breakfast_included": true,
               "cancellation_deadline": "2027-05-12T16:00:00Z",
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
@@ -3644,6 +3645,7 @@
               "availability": "available",
               "base_total": "860.00",
               "board": "breakfast",
+              "breakfast_included": true,
               "cancellation_deadline": "2027-05-12T16:00:00Z",
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
@@ -3745,6 +3747,7 @@
               "availability": "available",
               "base_total": "860.00",
               "board": "breakfast",
+              "breakfast_included": true,
               "cancellation_deadline": "2027-05-12T16:00:00Z",
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
@@ -3853,6 +3856,7 @@
               "availability": "available",
               "base_total": "860.00",
               "board": "breakfast",
+              "breakfast_included": true,
               "cancellation_deadline": "2027-05-12T16:00:00Z",
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
@@ -7012,6 +7016,7 @@
                       "availability": "available",
                       "base_total": "860.00",
                       "board": "breakfast",
+                      "breakfast_included": true,
                       "cancellation_deadline": "2027-05-12T16:00:00Z",
                       "cancellation_deadline_local": "2027-05-12T18:00:00",
                       "cancellation_penalties": [
@@ -7115,6 +7120,7 @@
                     "availability": "available",
                     "base_total": "860.00",
                     "board": "breakfast",
+                    "breakfast_included": true,
                     "cancellation_deadline": "2027-05-12T16:00:00Z",
                     "cancellation_deadline_local": "2027-05-12T18:00:00",
                     "cancellation_penalties": [
@@ -7605,6 +7611,7 @@
                               "availability": "available",
                               "base_total": "860.00",
                               "board": "breakfast",
+                              "breakfast_included": true,
                               "cancellation_deadline": "2027-05-12T16:00:00Z",
                               "cancellation_deadline_local": "2027-05-12T18:00:00",
                               "cancellation_penalties": [
@@ -8290,7 +8297,19 @@
               }
             ],
             "title": "Board",
-            "description": "Meals included: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source does not say."
+            "description": "The meal plan the source states: `none`, `breakfast`, `half` (breakfast and dinner), `full` (all meals) or `all_inclusive`; null when the source states no meal plan. A source that only says breakfast is included sets `breakfast_included`, not this."
+          },
+          "breakfast_included": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breakfast Included",
+            "description": "The source's own statement that breakfast is included in the rate: true, false, or null when it does not say. A separate fact from `board` and never derived from it: a rate can read `breakfast_included: true` with `board: null` (breakfast at least; the source named no meal plan), and `board: half` with `breakfast_included: null`."
           },
           "free_cancellation": {
             "anyOf": [
@@ -8488,6 +8507,7 @@
             "availability": "available",
             "base_total": "860.00",
             "board": "breakfast",
+            "breakfast_included": true,
             "cancellation_deadline": "2027-05-12T16:00:00Z",
             "cancellation_deadline_local": "2027-05-12T18:00:00",
             "cancellation_penalties": [
@@ -10766,6 +10786,7 @@
                         "availability": "available",
                         "base_total": "860.00",
                         "board": "breakfast",
+                        "breakfast_included": true,
                         "cancellation_deadline": "2027-05-12T16:00:00Z",
                         "cancellation_deadline_local": "2027-05-12T18:00:00",
                         "cancellation_penalties": [
@@ -14842,6 +14863,7 @@
                             "availability": "available",
                             "base_total": "860.00",
                             "board": "breakfast",
+                            "breakfast_included": true,
                             "cancellation_deadline": "2027-05-12T16:00:00Z",
                             "cancellation_deadline_local": "2027-05-12T18:00:00",
                             "cancellation_penalties": [
