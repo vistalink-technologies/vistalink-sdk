@@ -1428,10 +1428,10 @@ class Health(BaseModel):
     version: Annotated[
         str | None,
         Field(
-            description="API version, `2.3.0`; the OpenAPI document's `info.version`.",
+            description="API version, `2.4.0`; the OpenAPI document's `info.version`.",
             title="Version",
         ),
-    ] = "2.3.0"
+    ] = "2.4.0"
     checks: Annotated[
         dict[str, Literal["ok", "unavailable"]] | None,
         Field(
@@ -1447,7 +1447,8 @@ class Health(BaseModel):
 class HotelIdentifier(BaseModel):
     """
     A hotel named by something other than its `hotel_id`. Send exactly one form:
-    `booking_url`, `website_url`, `expedia_url`, or `name` with `city` (and ideally `country`).
+    `booking_url`, `website_url`, `expedia_url`, `name` with `city` (and ideally `country`), or
+    `engine` with `engine_hotel_id` (and `chain_code` where the engine has chains).
     """
 
     model_config = ConfigDict(
@@ -1499,6 +1500,34 @@ class HotelIdentifier(BaseModel):
             description="ISO 3166-1 alpha-2 country of the hotel named in `name`; narrows the name match, and a wrong value makes it miss.",
             pattern="^[A-Za-z]{2}$",
             title="Country",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Booking engine the hotel is named on, a code from `GET /v2/engines` such as `SYNXIS`; needs `engine_hotel_id`. Matched only against hotels whose engine code VistaLink has verified: the answer is `exact` or it does not resolve, never a nearest match. Offered to named partner teams only: any other team gets `unsupported` with reason `engine_identity_not_enabled` for this input and should send a `hotel_id`, a URL or name and city.",
+            max_length=32,
+            min_length=1,
+            pattern="^[A-Za-z0-9][A-Za-z0-9 _-]*$",
+            title="Engine",
+        ),
+    ] = None
+    engine_hotel_id: Annotated[
+        str | None,
+        Field(
+            description="The engine's own code for the hotel, exactly as the engine writes it, such as the SynXis hotel id `7389`; required with `engine`, not allowed without it.",
+            max_length=64,
+            min_length=1,
+            title="Engine Hotel Id",
+        ),
+    ] = None
+    chain_code: Annotated[
+        str | None,
+        Field(
+            description="The engine's code for the hotel's chain, such as the SynXis chain id `24876`; only with `engine`. Required for engines that have chains (SynXis): a hotel code is unique inside its chain, not across the engine. Leave it out for engines without chains (Accor).",
+            max_length=64,
+            min_length=1,
+            title="Chain Code",
         ),
     ] = None
 
@@ -3138,7 +3167,7 @@ class ResolveResult(BaseModel):
     basis: Annotated[
         str | None,
         Field(
-            description='What the match rests on, present only when resolved: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, or `hotel_id` when a uuid was passed through. Values known when this SDK was built: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, `hotel_id`. The API may add values; treat one you do not know as "other".',
+            description='What the match rests on, present only when resolved: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, or `hotel_id` when a uuid was passed through. Values known when this SDK was built: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, `hotel_id`, `engine_identity`. The API may add values; treat one you do not know as "other".',
             title="Basis",
         ),
     ] = None
@@ -3154,7 +3183,7 @@ class ResolveResult(BaseModel):
     reason: Annotated[
         str | None,
         Field(
-            description='Why the input did not resolve; absent when `resolved`. `not_found`, `ambiguous_website` (the host belongs to several hotels), `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url` or `invalid_hotel_id` with `unresolved`; `expedia_not_ingested` with `unsupported`; `not_indexed` with `known_unindexed`. Values known when this SDK was built: `not_found`, `ambiguous_website`, `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url`, `invalid_hotel_id`, `expedia_not_ingested`, `not_indexed`. The API may add values; treat one you do not know as "other".',
+            description='Why the input did not resolve; absent when `resolved`. `not_found`, `ambiguous_website` (the host belongs to several hotels), `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url` or `invalid_hotel_id` with `unresolved`; `expedia_not_ingested` with `unsupported`; `not_indexed` with `known_unindexed`. Values known when this SDK was built: `not_found`, `ambiguous_website`, `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url`, `invalid_hotel_id`, `expedia_not_ingested`, `not_indexed`, `engine_not_supported`, `engine_identity_not_enabled`, `engine_identity_not_bound`, `engine_identity_ambiguous`, `engine_identity_limit`, `engine_identity_unavailable`, `engine_chain_code_required`, `ambiguous_name`. The API may add values; treat one you do not know as "other".',
             title="Reason",
         ),
     ] = None
@@ -3829,8 +3858,8 @@ class Versions(BaseModel):
         extra="allow",
     )
     contract: Annotated[
-        str | None, Field(description="API contract version, `2.3`.", title="Contract")
-    ] = "2.3"
+        str | None, Field(description="API contract version, `2.4`.", title="Contract")
+    ] = "2.4"
     ranking: Annotated[
         str | None,
         Field(
@@ -3889,7 +3918,7 @@ class Warning(BaseModel):
     code: Annotated[
         str,
         Field(
-            description='Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), on rates `currency_unavailable`, and on search `daily_hotel_cap` (results over the team\'s daily limit of different hotels were withheld).',
+            description="Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with \"a rate on request\"), on rates `currency_unavailable` and `probable_match` (some hotels were with prices were reached by a name or website match, not a confirmed identity; the message says how many and each result's `resolved_match` says which: confirm the hotel before you rely on its price), and on search `daily_hotel_cap` (results over the team's daily limit of different hotels were withheld).",
             title="Code",
         ),
     ]
@@ -5232,6 +5261,29 @@ class RateResult(BaseModel):
             description="Index of the hotel in the request's `hotels[]`.", title="Input"
         ),
     ]
+    resolved_match: Annotated[
+        Literal["exact", "verified", "probable"] | None,
+        Field(
+            description="How the input was matched to `hotel_id`, as `POST /v2/hotels/resolve` reports it: `exact` (a `hotel_id`, a listing slug or an engine code), `verified` (a confirmed website) or `probable` (a name or a website host). A `probable` match is not a confirmed identity: check the hotel before you use its prices. Null when the input did not resolve.",
+            title="Resolved Match",
+        ),
+    ] = None
+    resolved_basis: Annotated[
+        str | None,
+        Field(
+            description='What the match rests on, as on resolve (`hotel_id`, `engine_identity`, `name_city`, …). Values known when this SDK was built: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, `hotel_id`, `engine_identity`. The API may add values; treat one you do not know as "other".',
+            title="Resolved Basis",
+        ),
+    ] = None
+    resolved_confidence: Annotated[
+        float | None,
+        Field(
+            description="Score from 0 to 1 on a `probable` match; null on `exact` and `verified`.",
+            ge=0.0,
+            le=1.0,
+            title="Resolved Confidence",
+        ),
+    ] = None
     status: Annotated[
         Literal["observed", "stale", "unknown", "unsupported", "unresolved"],
         Field(
@@ -5242,7 +5294,7 @@ class RateResult(BaseModel):
     reason: Annotated[
         str | None,
         Field(
-            description='Why this hotel has no priced offer, or why the input did not resolve. On `unresolved`, the `POST /v2/hotels/resolve` reason (`invalid_hotel_id`, `not_found`, `not_indexed`, …). On `unsupported`, `engine_not_live_enabled`. On `unknown`: `engine_blocked` (an edge block, or a cancel after blocks — not a timeout), `engine_timeout`, `engine_failed`, or a reason the booking engine stated (`sold_out`, `member_only`, `limit`, `min_stay`, `not_found`). The same codes are served on a cached read when that is why there is no price. On `observed` with no rooms, `sold_out` — the engine said nothing is available, and that result is billed. Null on a priced result and on a cached miss with no recorded cause. Values known when this SDK was built: `not_found`, `ambiguous_website`, `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url`, `invalid_hotel_id`, `expedia_not_ingested`, `not_indexed`, `sold_out`, `member_only`, `limit`, `min_stay`, `engine_blocked`, `engine_timeout`, `engine_failed`, `engine_not_live_enabled`. The API may add values; treat one you do not know as "other".',
+            description='Why this hotel has no priced offer, or why the input did not resolve. On `unresolved`, the `POST /v2/hotels/resolve` reason (`invalid_hotel_id`, `not_found`, `not_indexed`, …). On `unsupported`, `engine_not_live_enabled`. On `unknown`: `engine_blocked` (an edge block, or a cancel after blocks — not a timeout), `engine_timeout`, `engine_failed`, or a reason the booking engine stated (`sold_out`, `member_only`, `limit`, `min_stay`, `not_found`). The same codes are served on a cached read when that is why there is no price. On `observed` with no rooms, `sold_out` — the engine said nothing is available, and that result is billed. Null on a priced result and on a cached miss with no recorded cause. Values known when this SDK was built: `not_found`, `ambiguous_website`, `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url`, `invalid_hotel_id`, `expedia_not_ingested`, `not_indexed`, `engine_not_supported`, `engine_identity_not_enabled`, `engine_identity_not_bound`, `engine_identity_ambiguous`, `engine_identity_limit`, `engine_identity_unavailable`, `engine_chain_code_required`, `ambiguous_name`, `sold_out`, `member_only`, `limit`, `min_stay`, `engine_blocked`, `engine_timeout`, `engine_failed`, `engine_not_live_enabled`. The API may add values; treat one you do not know as "other".',
             title="Reason",
         ),
     ] = None
@@ -5424,7 +5476,7 @@ class RatesResponse(BaseModel):
     warnings: Annotated[
         list[Warning] | None,
         Field(
-            description="Things the call could not fully do, such as `currency_not_converted`, `channel_unavailable`, `live_unavailable` or `live_partial`.",
+            description="Things the call could not fully do, such as `currency_not_converted`, `channel_unavailable`, `live_unavailable`, `live_partial` or `probable_match` (some hotels with prices were reached by a name or website match, not a confirmed identity; see each result's `resolved_match`).",
             title="Warnings",
         ),
     ] = None

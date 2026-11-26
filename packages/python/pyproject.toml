@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vistalink"
-version = "2.3.0"
+version = "2.4.0"
 description = "Python client for the VistaLink hotel API v2 (sync + async, httpx + pydantic)"
 readme = "README.md"
 license = "MIT"

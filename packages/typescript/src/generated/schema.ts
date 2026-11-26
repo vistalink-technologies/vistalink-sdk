@@ -2712,7 +2712,7 @@ export interface components {
          *       },
          *       "request_id": "req_8f2c1a9b3d4e5f60",
          *       "status": "ok",
-         *       "version": "2.3.0"
+         *       "version": "2.4.0"
          *     }
          */
         Health: {
@@ -2724,8 +2724,8 @@ export interface components {
             status: "ok" | "degraded";
             /**
              * Version
-             * @description API version, `2.3.0`; the OpenAPI document's `info.version`.
-             * @default 2.3.0
+             * @description API version, `2.4.0`; the OpenAPI document's `info.version`.
+             * @default 2.4.0
              */
             version?: string;
             /**
@@ -3059,7 +3059,8 @@ export interface components {
         /**
          * HotelIdentifier
          * @description A hotel named by something other than its `hotel_id`. Send exactly one form:
-         *     `booking_url`, `website_url`, `expedia_url`, or `name` with `city` (and ideally `country`).
+         *     `booking_url`, `website_url`, `expedia_url`, `name` with `city` (and ideally `country`), or
+         *     `engine` with `engine_hotel_id` (and `chain_code` where the engine has chains).
          */
         HotelIdentifier: {
             /**
@@ -3092,6 +3093,21 @@ export interface components {
              * @description ISO 3166-1 alpha-2 country of the hotel named in `name`; narrows the name match, and a wrong value makes it miss.
              */
             country?: string | null;
+            /**
+             * Engine
+             * @description Booking engine the hotel is named on, a code from `GET /v2/engines` such as `SYNXIS`; needs `engine_hotel_id`. Matched only against hotels whose engine code VistaLink has verified: the answer is `exact` or it does not resolve, never a nearest match. Offered to named partner teams only: any other team gets `unsupported` with reason `engine_identity_not_enabled` for this input and should send a `hotel_id`, a URL or name and city.
+             */
+            engine?: string | null;
+            /**
+             * Engine Hotel Id
+             * @description The engine's own code for the hotel, exactly as the engine writes it, such as the SynXis hotel id `7389`; required with `engine`, not allowed without it.
+             */
+            engine_hotel_id?: string | null;
+            /**
+             * Chain Code
+             * @description The engine's code for the hotel's chain, such as the SynXis chain id `24876`; only with `engine`. Required for engines that have chains (SynXis): a hotel code is unique inside its chain, not across the engine. Leave it out for engines without chains (Accor).
+             */
+            chain_code?: string | null;
         };
         /**
          * ImageRef
@@ -4803,6 +4819,21 @@ export interface components {
              */
             input: number;
             /**
+             * Resolved Match
+             * @description How the input was matched to `hotel_id`, as `POST /v2/hotels/resolve` reports it: `exact` (a `hotel_id`, a listing slug or an engine code), `verified` (a confirmed website) or `probable` (a name or a website host). A `probable` match is not a confirmed identity: check the hotel before you use its prices. Null when the input did not resolve.
+             */
+            resolved_match?: ("exact" | "verified" | "probable") | null;
+            /**
+             * Resolved Basis
+             * @description What the match rests on, as on resolve (`hotel_id`, `engine_identity`, `name_city`, …).
+             */
+            resolved_basis?: ("booking_slug" | "trusted_website_identity" | "website_host" | "expedia_id" | "name_city" | "hotel_id" | "engine_identity") | null;
+            /**
+             * Resolved Confidence
+             * @description Score from 0 to 1 on a `probable` match; null on `exact` and `verified`.
+             */
+            resolved_confidence?: number | null;
+            /**
              * Status
              * @description `observed` (recent prices), `stale` (older but within `max_age_hours`), `unknown` (no prices for this stay), `unsupported` (no readable booking engine, or the channel is not enabled) or `unresolved` (the input did not resolve to an indexed hotel).
              * @enum {string}
@@ -4812,7 +4843,7 @@ export interface components {
              * Reason
              * @description Why this hotel has no priced offer, or why the input did not resolve. On `unresolved`, the `POST /v2/hotels/resolve` reason (`invalid_hotel_id`, `not_found`, `not_indexed`, …). On `unsupported`, `engine_not_live_enabled`. On `unknown`: `engine_blocked` (an edge block, or a cancel after blocks — not a timeout), `engine_timeout`, `engine_failed`, or a reason the booking engine stated (`sold_out`, `member_only`, `limit`, `min_stay`, `not_found`). The same codes are served on a cached read when that is why there is no price. On `observed` with no rooms, `sold_out` — the engine said nothing is available, and that result is billed. Null on a priced result and on a cached miss with no recorded cause.
              */
-            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed" | "sold_out" | "member_only" | "limit" | "min_stay" | "engine_blocked" | "engine_timeout" | "engine_failed" | "engine_not_live_enabled") | null;
+            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed" | "engine_not_supported" | "engine_identity_not_enabled" | "engine_identity_not_bound" | "engine_identity_ambiguous" | "engine_identity_limit" | "engine_identity_unavailable" | "engine_chain_code_required" | "ambiguous_name" | "sold_out" | "member_only" | "limit" | "min_stay" | "engine_blocked" | "engine_timeout" | "engine_failed" | "engine_not_live_enabled") | null;
             /**
              * Channel
              * @description The channel read, as requested.
@@ -5102,7 +5133,7 @@ export interface components {
             summary?: components["schemas"]["RatesSummary"];
             /**
              * Warnings
-             * @description Things the call could not fully do, such as `currency_not_converted`, `channel_unavailable`, `live_unavailable` or `live_partial`.
+             * @description Things the call could not fully do, such as `currency_not_converted`, `channel_unavailable`, `live_unavailable`, `live_partial` or `probable_match` (some hotels with prices were reached by a name or website match, not a confirmed identity; see each result's `resolved_match`).
              */
             warnings?: components["schemas"]["Warning_"][];
         };
@@ -5773,6 +5804,11 @@ export interface components {
          *           "city": "Rome",
          *           "country": "IT",
          *           "name": "Umiltà 36"
+         *         },
+         *         {
+         *           "chain_code": "24876",
+         *           "engine": "SYNXIS",
+         *           "engine_hotel_id": "7389"
          *         }
          *       ]
          *     }
@@ -5864,7 +5900,7 @@ export interface components {
              * Basis
              * @description What the match rests on, present only when resolved: `booking_slug`, `trusted_website_identity`, `website_host`, `expedia_id`, `name_city`, or `hotel_id` when a uuid was passed through.
              */
-            basis?: ("booking_slug" | "trusted_website_identity" | "website_host" | "expedia_id" | "name_city" | "hotel_id") | null;
+            basis?: ("booking_slug" | "trusted_website_identity" | "website_host" | "expedia_id" | "name_city" | "hotel_id" | "engine_identity") | null;
             /**
              * Confidence
              * @description Score from 0 to 1 on `probable` matches: 0.8 for a website host, 0.5 to 0.95 for a name match by strength (lower when a second candidate is as strong); absent on `exact` and `verified`.
@@ -5874,7 +5910,7 @@ export interface components {
              * Reason
              * @description Why the input did not resolve; absent when `resolved`. `not_found`, `ambiguous_website` (the host belongs to several hotels), `unparseable_booking_url`, `unparseable_website_url`, `unparseable_expedia_url` or `invalid_hotel_id` with `unresolved`; `expedia_not_ingested` with `unsupported`; `not_indexed` with `known_unindexed`.
              */
-            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed") | null;
+            reason?: ("not_found" | "ambiguous_website" | "unparseable_booking_url" | "unparseable_website_url" | "unparseable_expedia_url" | "invalid_hotel_id" | "expedia_not_ingested" | "not_indexed" | "engine_not_supported" | "engine_identity_not_enabled" | "engine_identity_not_bound" | "engine_identity_ambiguous" | "engine_identity_limit" | "engine_identity_unavailable" | "engine_chain_code_required" | "ambiguous_name") | null;
             /**
              * Booking Slug
              * @description The listing slug as `{cc}/{slug}` in lower case, for example `it/umilta-36`; present only on `known_unindexed`.
@@ -6498,7 +6534,7 @@ export interface components {
          *       "status": "completed",
          *       "total_estimate": 143,
          *       "versions": {
-         *         "contract": "2.3",
+         *         "contract": "2.4",
          *         "ranking": "r2026.10"
          *       },
          *       "warnings": [
@@ -6910,8 +6946,8 @@ export interface components {
         Versions: {
             /**
              * Contract
-             * @description API contract version, `2.3`.
-             * @default 2.3
+             * @description API contract version, `2.4`.
+             * @default 2.4
              */
             contract?: string;
             /**
@@ -6953,7 +6989,7 @@ export interface components {
         Warning_: {
             /**
              * Code
-             * @description Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), on rates `currency_unavailable`, and on search `daily_hotel_cap` (results over the team's daily limit of different hotels were withheld).
+             * @description Stable warning code: `rates_unavailable` (some hotels have no stored rate), `rates_need_stay` (rates asked for without a stay), `channel_unavailable` (the third-party channel was left out), `constraints_relaxed` (no exact match, so some constraints were loosened), `semantic_unavailable`, `unresolved` (with clarification policy `never`), `search_id_unavailable` (the search cannot be paged or referenced), on chat `price_redacted` (a price in the reply that is not a direct rate was replaced with "a rate on request"), on rates `currency_unavailable` and `probable_match` (some hotels were with prices were reached by a name or website match, not a confirmed identity; the message says how many and each result's `resolved_match` says which: confirm the hotel before you rely on its price), and on search `daily_hotel_cap` (results over the team's daily limit of different hotels were withheld).
              */
             code: string;
             /**

@@ -1,4 +1,4 @@
-"""API 2.3.0: the Offer rate fields are typed, optional, and parse the spec's own example."""
+"""API 2.3.0 and later: the Offer rate fields are typed, optional, and parse the spec's own example."""
 import json
 from pathlib import Path
 
@@ -12,7 +12,8 @@ FIELDS = ("rate_plan_code", "base_total", "tax_total", "fee_total", "taxes", "fe
 
 
 def test_spec_version_and_fields():
-    assert SPEC["info"]["version"].startswith("2.3.")
+    major, minor = (int(x) for x in SPEC["info"]["version"].split(".")[:2])
+    assert (major, minor) >= (2, 3), SPEC["info"]["version"]
     props = SPEC["components"]["schemas"]["Offer"]["properties"]
     for name in FIELDS:
         assert name in props, name
@@ -67,3 +68,9 @@ def test_request_enums_stay_closed():
         models.RatesRequest.model_validate({"hotels": ["43d0be71-5f0e-4f1e-9a51-2b7b3c4d5e6f"],
                                             "stay": {"check_in": "2027-05-14", "check_out": "2027-05-16"},
                                             "freshness": "sometimes"})
+
+
+def test_engine_code_identifier_is_typed():
+    """API 2.4.0: a hotel can be named by its booking-engine code."""
+    ident = models.HotelIdentifier.model_validate({"engine": "SYNXIS", "chain_code": "24876", "engine_hotel_id": "7389"})
+    assert ident.model_dump(exclude_none=True) == {"engine": "SYNXIS", "chain_code": "24876", "engine_hotel_id": "7389"}
