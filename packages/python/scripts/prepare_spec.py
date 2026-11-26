@@ -13,6 +13,16 @@ breaks round-tripping identifiers, and ``EmailStr`` needs the extra
 ``email-validator`` package. The server validates them. ``date`` and
 ``date-time`` are kept (``date`` / ``AwareDatetime``).
 
+**Open enums.** The API adds values to some response vocabularies without a
+new major (its additive-change policy: ``reason`` codes, failure reasons, the
+``basis`` of a match, job kinds). Generated as closed ``Literal`` types, such a
+field makes ``model_validate`` reject the WHOLE response the day the API sends
+a value this SDK build has never seen. So the enum is dropped from those
+fields and they become plain ``str``; the values known at build time are
+listed in the field's description. A field is open when the spec marks it
+``x-vistalink-open-enum: true``, or when its name is in ``OPEN_ENUM_FIELDS``
+(for specs published before the marker existed).
+
     python scripts/prepare_spec.py IN.json OUT.json
 """
 import json
@@ -20,6 +30,49 @@ import sys
 
 SCALARS = {"string", "integer", "number", "boolean", "array"}
 PLAIN_STRING_FORMATS = {"uuid", "uri", "email"}
+OPEN_ENUM_MARK = "x-vistalink-open-enum"
+OPEN_ENUM_FIELDS = {"reason", "no_price_reason", "failure_reason", "basis", "resolved_basis", "kind"}
+
+
+def _open(schema):
+    """``schema`` with its string enum removed (directly or inside an anyOf); the values go to the description."""
+    values = []
+
+    def strip(node):
+        if isinstance(node, dict):
+            if node.get("type") == "string" and isinstance(node.get("enum"), list):
+                values.extend(v for v in node["enum"] if isinstance(v, str))
+                node = {k: v for k, v in node.items() if k != "enum"}
+            if isinstance(node.get("anyOf"), list):
+                node = {**node, "anyOf": [strip(x) for x in node["anyOf"]]}
+        return node
+
+    out = strip(dict(schema))
+    if not values:
+        return schema
+    known = "Values known when this SDK was built: " + ", ".join(f"`{v}`" for v in dict.fromkeys(values)) + \
+        ". The API may add values; treat one you do not know as \"other\"."
+    out["description"] = (out.get("description", "").rstrip() + " " + known).strip()
+    out.pop(OPEN_ENUM_MARK, None)
+    return out
+
+
+def open_enums(node, in_response=True):
+    """Open the marked or named enum fields of every object schema."""
+    if isinstance(node, list):
+        return [open_enums(x) for x in node]
+    if not isinstance(node, dict):
+        return node
+    node = {k: open_enums(v) for k, v in node.items()}
+    props = node.get("properties")
+    # Request bodies forbid unknown keys and are validated by the server: their enums stay closed, so a
+    # typo is caught before the request is sent.
+    if isinstance(props, dict) and node.get("additionalProperties") is not False:
+        node["properties"] = {
+            name: (_open(schema) if isinstance(schema, dict)
+                   and (schema.get(OPEN_ENUM_MARK) is True or name in OPEN_ENUM_FIELDS) else schema)
+            for name, schema in props.items()}
+    return node
 
 
 def walk(node):
@@ -48,4 +101,4 @@ if __name__ == "__main__":
     with open(sys.argv[1]) as fh:
         doc = json.load(fh)
     with open(sys.argv[2], "w") as fh:
-        json.dump(walk(doc), fh, indent=1)
+        json.dump(walk(open_enums(doc)), fh, indent=1)
