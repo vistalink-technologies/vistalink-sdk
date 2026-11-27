@@ -1662,7 +1662,7 @@ export interface components {
             currency?: string | null;
             /**
              * Nights
-             * @description Charge as a number of nights of the stay; null when not stated that way.
+             * @description Charge as a whole number of nights of the stay; null when not stated that way. An integer since 2.5.0 (earlier versions sent the same value as a decimal, for example `1.0`).
              */
             nights?: number | null;
         };
@@ -2712,7 +2712,7 @@ export interface components {
          *       },
          *       "request_id": "req_8f2c1a9b3d4e5f60",
          *       "status": "ok",
-         *       "version": "2.4.0"
+         *       "version": "2.5.0"
          *     }
          */
         Health: {
@@ -2724,8 +2724,8 @@ export interface components {
             status: "ok" | "degraded";
             /**
              * Version
-             * @description API version, `2.4.0`; the OpenAPI document's `info.version`.
-             * @default 2.4.0
+             * @description API version, `2.5.0`; the OpenAPI document's `info.version`.
+             * @default 2.5.0
              */
             version?: string;
             /**
@@ -6534,7 +6534,7 @@ export interface components {
          *       "status": "completed",
          *       "total_estimate": 143,
          *       "versions": {
-         *         "contract": "2.4",
+         *         "contract": "2.5",
          *         "ranking": "r2026.10"
          *       },
          *       "warnings": [
@@ -6946,8 +6946,8 @@ export interface components {
         Versions: {
             /**
              * Contract
-             * @description API contract version, `2.4`.
-             * @default 2.4
+             * @description API contract version, `2.5`.
+             * @default 2.5
              */
             contract?: string;
             /**

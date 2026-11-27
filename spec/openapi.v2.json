@@ -3,7 +3,7 @@
   "info": {
     "title": "VistaLink API",
     "description": "VistaLink hotel API v2, over a catalogue of 800,000 hotels worldwide. Authenticate with `Authorization: Bearer vl_live_…` (or `vl_test_…`). Money is a decimal string with a sibling ISO 4217 `currency`. Every response carries `request_id` and `billing` (null when free); errors are `{error: {code, message, request_id, details?}}`. Rate-limit headers `X-RateLimit-Limit/Remaining/Reset`, credit header `X-Credit-Remaining` (USD). Calls that return hotel data also carry the daily distinct-hotel allowance, `X-Hotel-Quota-Limit/Remaining/Reset` (absent on plans without one).",
-    "version": "2.4.0",
+    "version": "2.5.0",
     "summary": "Hotel resolution, search, content, rates, room reconciliation, booking and email quotes.",
     "contact": {
       "name": "VistaLink",
@@ -3567,7 +3567,7 @@
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
                 {
-                  "nights": 1.0,
+                  "nights": 1,
                   "starts_at": "2027-05-12T16:00:00Z",
                   "starts_local": "2027-05-12T18:00:00"
                 }
@@ -3650,7 +3650,7 @@
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
                 {
-                  "nights": 1.0,
+                  "nights": 1,
                   "starts_at": "2027-05-12T16:00:00Z",
                   "starts_local": "2027-05-12T18:00:00"
                 }
@@ -3752,7 +3752,7 @@
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
                 {
-                  "nights": 1.0,
+                  "nights": 1,
                   "starts_at": "2027-05-12T16:00:00Z",
                   "starts_local": "2027-05-12T18:00:00"
                 }
@@ -3861,7 +3861,7 @@
               "cancellation_deadline_local": "2027-05-12T18:00:00",
               "cancellation_penalties": [
                 {
-                  "nights": 1.0,
+                  "nights": 1,
                   "starts_at": "2027-05-12T16:00:00Z",
                   "starts_local": "2027-05-12T18:00:00"
                 }
@@ -4689,14 +4689,14 @@
           "nights": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Nights",
-            "description": "Charge as a number of nights of the stay; null when not stated that way."
+            "description": "Charge as a whole number of nights of the stay; null when not stated that way. An integer since 2.5.0 (earlier versions sent the same value as a decimal, for example `1.0`)."
           }
         },
         "type": "object",
@@ -6697,8 +6697,8 @@
           "version": {
             "type": "string",
             "title": "Version",
-            "description": "API version, `2.4.0`; the OpenAPI document's `info.version`.",
-            "default": "2.4.0"
+            "description": "API version, `2.5.0`; the OpenAPI document's `info.version`.",
+            "default": "2.5.0"
           },
           "checks": {
             "additionalProperties": {
@@ -6738,7 +6738,7 @@
             },
             "request_id": "req_8f2c1a9b3d4e5f60",
             "status": "ok",
-            "version": "2.4.0"
+            "version": "2.5.0"
           }
         ]
       },
@@ -7021,7 +7021,7 @@
                       "cancellation_deadline_local": "2027-05-12T18:00:00",
                       "cancellation_penalties": [
                         {
-                          "nights": 1.0,
+                          "nights": 1,
                           "starts_at": "2027-05-12T16:00:00Z",
                           "starts_local": "2027-05-12T18:00:00"
                         }
@@ -7125,7 +7125,7 @@
                     "cancellation_deadline_local": "2027-05-12T18:00:00",
                     "cancellation_penalties": [
                       {
-                        "nights": 1.0,
+                        "nights": 1,
                         "starts_at": "2027-05-12T16:00:00Z",
                         "starts_local": "2027-05-12T18:00:00"
                       }
@@ -7659,7 +7659,7 @@
                               "cancellation_deadline_local": "2027-05-12T18:00:00",
                               "cancellation_penalties": [
                                 {
-                                  "nights": 1.0,
+                                  "nights": 1,
                                   "starts_at": "2027-05-12T16:00:00Z",
                                   "starts_local": "2027-05-12T18:00:00"
                                 }
@@ -8555,7 +8555,7 @@
             "cancellation_deadline_local": "2027-05-12T18:00:00",
             "cancellation_penalties": [
               {
-                "nights": 1.0,
+                "nights": 1,
                 "starts_at": "2027-05-12T16:00:00Z",
                 "starts_local": "2027-05-12T18:00:00"
               }
@@ -10894,7 +10894,7 @@
                         "cancellation_deadline_local": "2027-05-12T18:00:00",
                         "cancellation_penalties": [
                           {
-                            "nights": 1.0,
+                            "nights": 1,
                             "starts_at": "2027-05-12T16:00:00Z",
                             "starts_local": "2027-05-12T18:00:00"
                           }
@@ -13675,7 +13675,7 @@
             "status": "completed",
             "total_estimate": 143,
             "versions": {
-              "contract": "2.4",
+              "contract": "2.5",
               "ranking": "r2026.10"
             },
             "warnings": [
@@ -14369,8 +14369,8 @@
           "contract": {
             "type": "string",
             "title": "Contract",
-            "description": "API contract version, `2.4`.",
-            "default": "2.4"
+            "description": "API contract version, `2.5`.",
+            "default": "2.5"
           },
           "ranking": {
             "anyOf": [
@@ -14988,7 +14988,7 @@
                                 "amount": null,
                                 "currency": null,
                                 "days_before_arrival": null,
-                                "nights": 1.0,
+                                "nights": 1,
                                 "percent": null,
                                 "percent_of": null,
                                 "starts_at": "2027-05-12T16:00:00Z",
