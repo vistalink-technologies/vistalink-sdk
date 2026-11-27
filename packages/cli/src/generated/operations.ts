@@ -20,7 +20,7 @@ export interface Operation {
   scope: string | null;
   public: boolean;
 }
-export const SPEC_VERSION = "2.4.0";
+export const SPEC_VERSION = "2.5.0";
 export const OPERATIONS: Operation[] = [
   {
     "key": "POST /v2/hotels/resolve",

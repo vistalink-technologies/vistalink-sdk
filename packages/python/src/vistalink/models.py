@@ -419,9 +419,9 @@ class CancellationPenalty(BaseModel):
         ),
     ] = None
     nights: Annotated[
-        float | None,
+        int | None,
         Field(
-            description="Charge as a number of nights of the stay; null when not stated that way.",
+            description="Charge as a whole number of nights of the stay; null when not stated that way. An integer since 2.5.0 (earlier versions sent the same value as a decimal, for example `1.0`).",
             title="Nights",
         ),
     ] = None
@@ -1428,10 +1428,10 @@ class Health(BaseModel):
     version: Annotated[
         str | None,
         Field(
-            description="API version, `2.4.0`; the OpenAPI document's `info.version`.",
+            description="API version, `2.5.0`; the OpenAPI document's `info.version`.",
             title="Version",
         ),
-    ] = "2.4.0"
+    ] = "2.5.0"
     checks: Annotated[
         dict[str, Literal["ok", "unavailable"]] | None,
         Field(
@@ -3858,8 +3858,8 @@ class Versions(BaseModel):
         extra="allow",
     )
     contract: Annotated[
-        str | None, Field(description="API contract version, `2.4`.", title="Contract")
-    ] = "2.4"
+        str | None, Field(description="API contract version, `2.5`.", title="Contract")
+    ] = "2.5"
     ranking: Annotated[
         str | None,
         Field(

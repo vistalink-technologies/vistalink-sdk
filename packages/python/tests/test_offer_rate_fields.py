@@ -74,3 +74,9 @@ def test_engine_code_identifier_is_typed():
     """API 2.4.0: a hotel can be named by its booking-engine code."""
     ident = models.HotelIdentifier.model_validate({"engine": "SYNXIS", "chain_code": "24876", "engine_hotel_id": "7389"})
     assert ident.model_dump(exclude_none=True) == {"engine": "SYNXIS", "chain_code": "24876", "engine_hotel_id": "7389"}
+
+
+def test_penalty_nights_is_an_integer():
+    """API 2.5.0: `CancellationPenalty.nights` is a whole number."""
+    pen = models.CancellationPenalty.model_validate({"nights": 1})
+    assert pen.nights == 1 and type(pen.nights) is int
